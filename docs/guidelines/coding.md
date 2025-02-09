@@ -2,12 +2,39 @@
 
 > This document provides an overview of coding standards for the ReelAI project. For detailed guidelines, refer to the specific documents in the `coding/` directory.
 
+## Dependency Management
+
+### Package Installation
+Always use `--save` for runtime dependencies and `--save-dev` for development dependencies:
+```bash
+# Runtime dependencies
+npm install --save package-name
+
+# Development dependencies
+npm install --save-dev package-name
+```
+
+This ensures that all dependencies are properly tracked in package.json and can be installed by other developers.
+
 ## Quick Reference
 
 ### Project Structure
 - Feature-based architecture
 - Core utilities and shared components
 - See [coding/structure.md](./coding/structure.md) for details
+
+### File Length Guidelines
+- Soft limit: 250 lines per file
+- Break larger files into modules
+- Use composition over inheritance
+- Create utility files for shared logic
+- Extract complex logic into services
+
+When a file exceeds 250 lines:
+1. Split by feature/functionality
+2. Create helper/utility files
+3. Extract reusable components
+4. Document file relationships
 
 ### Code Style
 - TypeScript-first approach

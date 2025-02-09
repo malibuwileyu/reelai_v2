@@ -1,0 +1,107 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    function isValidVideoData(data) {
+      return data.size() < 1000000 
+        && data.title is string
+        && data.title.size() > 0
+        && data.title.size() <= 100
+        && data.description is string
+        && data.description.size() <= 5000
+        && data.category in ['education', 'tutorial', 'lecture', 'presentation', 'other']
+        && data.tags is list
+        && data.tags.size() <= 20
+        && data.isPublic is bool
+        && data.language is string
+        && data.language.size() <= 10
+        && (!('difficulty' in data) || data.difficulty in ['beginner', 'intermediate', 'advanced'])
+        && data.views is number
+        && data.views >= 0
+        && data.likes is number
+        && data.likes >= 0;
+    }
+
+    function isValidLearningPath(data) {
+      return data.size() < 1000000
+        && data.title is string
+        && data.title.size() > 0
+        && data.title.size() <= 100
+        && data.description is string
+        && data.description.size() <= 5000
+        && data.subject is string
+        && data.difficulty in ['beginner', 'intermediate', 'advanced']
+        && data.prerequisites is list
+        && data.estimatedHours is number
+        && data.estimatedHours > 0
+        && data.milestones is list;
+    }
+    
+    // Video rules
+    match /videos/{videoId} {
+      allow read: if resource.data.isPublic == true || 
+                   (isAuthenticated() && resource.data.creatorId == request.auth.uid);
+      allow create: if isAuthenticated() 
+        && isValidVideoData(request.resource.data)
+        && request.resource.data.creatorId == request.auth.uid;
+      allow update: if isAuthenticated() 
+        && resource.data.creatorId == request.auth.uid
+        && isValidVideoData(request.resource.data);
+      allow delete: if isAuthenticated() 
+        && resource.data.creatorId == request.auth.uid;
+    }
+
+    // Achievement Progress rules
+    match /achievementProgress/{progressId} {
+      allow read: if isAuthenticated() 
+        && request.auth.uid == resource.data.userId;
+      allow write: if isAuthenticated()
+        && request.auth.uid == request.resource.data.userId;
+    }
+
+    // Learning Path rules
+    match /learningPaths/{pathId} {
+      allow read: if 
+        // Allow reading published paths
+        resource.data.status == 'published' || 
+        // Allow reading own paths
+        (isAuthenticated() && resource.data.creatorId == request.auth.uid) ||
+        // Allow listing paths with proper query constraints
+        (isAuthenticated() && 
+         request.query.limit <= 1000 && 
+         'creatorId' in request.query.filters && 
+         request.query.filters.creatorId == request.auth.uid);
+      
+      allow create: if isAuthenticated()
+        && isValidLearningPath(request.resource.data)
+        && request.resource.data.creatorId == request.auth.uid;
+      
+      allow update: if isAuthenticated()
+        && resource.data.creatorId == request.auth.uid
+        && isValidLearningPath(request.resource.data);
+      
+      allow delete: if isAuthenticated()
+        && resource.data.creatorId == request.auth.uid;
+    }
+
+    // Path Progress rules
+    match /pathProgress/{progressId} {
+      allow read, write: if isAuthenticated() 
+        && request.auth.uid == resource.data.userId;
+    }
+
+    // Milestone Progress rules
+    match /milestoneProgress/{progressId} {
+      allow read, write: if isAuthenticated()
+        && request.auth.uid == resource.data.userId;
+    }
+  }
+} 
