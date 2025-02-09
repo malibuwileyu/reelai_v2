@@ -1,0 +1,1 @@
+#!/bin/bash\npkill -f "cli.js start" || echo "No Metro bundler processes found"\nfuser -k 8081/tcp 2>/dev/null || echo "No processes found on port 8081"\nrm -rf $TMPDIR/metro-* 2>/dev/null || echo "No Metro cache to clean"\necho "Metro cleanup completed"
