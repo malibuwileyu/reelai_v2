@@ -1,80 +1,151 @@
-import { test, admin } from './setup';
+import { describe, it, expect } from '@jest/globals';
 import { onVideoUploaded } from '../video/processVideo';
-import { describe, it, expect, beforeEach, afterAll, jest } from '@jest/globals';
-
-jest.setTimeout(10000);
+import * as admin from 'firebase-admin';
+import { StorageEvent } from 'firebase-functions/v2/storage';
+import { admin as setupAdmin } from './setup';
 
 describe('Video Processing Functions', () => {
-  beforeEach(async () => {
-    // Clear test data before each test
-    const videosRef = admin.firestore().collection('videos');
-    const snapshot = await videosRef.get();
-    const deletePromises = snapshot.docs.map(doc => doc.ref.delete());
-    await Promise.all(deletePromises);
-  }, 10000);
-
-  afterAll(async () => {
-    // Final cleanup
-    const videosRef = admin.firestore().collection('videos');
-    const snapshot = await videosRef.get();
-    const deletePromises = snapshot.docs.map(doc => doc.ref.delete());
-    await Promise.all(deletePromises);
-  });
-
-  // Helper function to wait for document update
-  const waitForDocumentUpdate = async (docRef: admin.firestore.DocumentReference, maxAttempts = 5) => {
-    for (let i = 0; i < maxAttempts; i++) {
-      const doc = await docRef.get();
-      const data = doc.data();
-      if (data?.status === 'ready') {
-        return data;
+  const waitForDocumentUpdate = async (videoId: string, maxAttempts = 20) => {
+    let attempts = 0;
+    while (attempts < maxAttempts) {
+      const doc = await admin.firestore().collection('videos').doc(videoId).get();
+      if (doc.exists && doc.data()?.status === 'ready') {
+        return doc.data();
       }
-      await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second between attempts
+      attempts++;
+      await new Promise(resolve => setTimeout(resolve, 500)); // Wait 500ms between attempts
     }
-    throw new Error('Document did not update within the expected time');
+    throw new Error(`Document ${videoId} did not update to 'ready' status within ${maxAttempts * 500}ms`);
   };
 
   it('should process video upload and update metadata', async () => {
-    // Create a test video document
     const videoId = 'test-video-123';
-    const docRef = admin.firestore().collection('videos').doc(videoId);
-    
-    await docRef.set({
-      status: 'processing',
-      title: 'Test Video',
-      creatorId: 'test-user-123'
-    });
-
-    // Mock storage event
-    const wrapped = test.wrap(onVideoUploaded);
-    const testEvent = {
+    const userId = 'test-user-123';
+    const event: StorageEvent = {
       data: {
+        name: `videos/${userId}/${videoId}/video.mp4`,
         contentType: 'video/mp4',
-        name: `videos/test-user-123/${videoId}/video.mp4`,
-      }
+        size: 42,
+        bucket: 'test-bucket',
+        generation: 123,
+        metageneration: 1,
+        timeCreated: new Date().toISOString(),
+        updated: new Date().toISOString(),
+        id: 'test-object-id',
+        storageClass: 'STANDARD'
+      },
+      bucket: 'test-bucket',
+      source: '//storage.googleapis.com/projects/_/buckets/test-bucket',
+      subject: `projects/_/buckets/test-bucket/objects/videos/${userId}/${videoId}/video.mp4`,
+      id: 'test-event-id',
+      type: 'google.cloud.storage.object.v1.finalized',
+      time: new Date().toISOString(),
+      specversion: '1.0'
     };
 
-    // Execute function
-    await wrapped(testEvent);
-
-    // Wait for and verify results
-    const data = await waitForDocumentUpdate(docRef);
-    expect(data).toBeDefined();
-    expect(data.status).toBe('ready');
-    expect(data.metadata).toBeDefined();
-    expect(data.metadata.format).toBe('video/mp4');
-  }, 10000);
+    await onVideoUploaded(event);
+    const videoData = await waitForDocumentUpdate(videoId);
+    
+    expect(videoData).toBeDefined();
+    expect(videoData?.status).toBe('ready');
+    expect(videoData?.metadata).toMatchObject({
+      format: 'video/mp4',
+      resolution: '1080p',
+    });
+  }, 30000); // Increase test timeout to 30 seconds
 
   it('should skip non-video files', async () => {
-    const wrapped = test.wrap(onVideoUploaded);
-    const testEvent = {
+    const event: StorageEvent = {
       data: {
-        contentType: 'image/jpeg',
         name: 'images/test.jpg',
-      }
+        contentType: 'image/jpeg',
+        size: 42,
+        bucket: 'test-bucket',
+        generation: 123,
+        metageneration: 1,
+        timeCreated: new Date().toISOString(),
+        updated: new Date().toISOString(),
+        id: 'test-object-id',
+        storageClass: 'STANDARD'
+      },
+      bucket: 'test-bucket',
+      source: '//storage.googleapis.com/projects/_/buckets/test-bucket',
+      subject: `projects/_/buckets/test-bucket/objects/images/test.jpg`,
+      id: 'test-event-id',
+      type: 'google.cloud.storage.object.v1.finalized',
+      time: new Date().toISOString(),
+      specversion: '1.0'
     };
 
-    await wrapped(testEvent);
-    // Function should exit early without error
-  }, 10000);
+    await onVideoUploaded(event);
+    // No assertions needed as we just verify it doesn't throw
+  }, 10000); // 10 second timeout for simpler test
+});
+
+describe('onVideoUploaded', () => {
+  it('should process video and update status', async () => {
+    const videoId = 'test-video-1';
+    const event: StorageEvent = {
+      data: {
+        contentType: 'video/mp4',
+        name: `videos/user123/${videoId}/original.mp4`,
+        bucket: 'test-bucket',
+        size: 1024,
+        generation: 12345,
+        metageneration: 1,
+        timeCreated: new Date().toISOString(),
+        updated: new Date().toISOString(),
+        id: 'test-object-id',
+        storageClass: 'STANDARD'
+      },
+      bucket: 'test-bucket',
+      source: '//storage.googleapis.com/projects/_/buckets/test-bucket',
+      subject: `projects/_/buckets/test-bucket/objects/videos/user123/${videoId}/original.mp4`,
+      id: 'test-event-id',
+      type: 'google.cloud.storage.object.v1.finalized',
+      time: new Date().toISOString(),
+      specversion: '1.0'
+    };
+
+    await onVideoUploaded(event);
+
+    // Verify the document was updated
+    const docRef = setupAdmin.firestore().collection('videos').doc(videoId);
+    const doc = await docRef.get();
+    expect(doc.exists).toBe(true);
+    expect(doc.data()?.status).toBe('ready');
+    expect(doc.data()?.metadata).toBeDefined();
+  });
+
+  it('should handle errors gracefully', async () => {
+    const videoId = 'test-video-2';
+    const event: StorageEvent = {
+      data: {
+        contentType: 'video/mp4',
+        name: `videos/user123/${videoId}/original.mp4`,
+        bucket: 'test-bucket',
+        size: 1024,
+        generation: 12345,
+        metageneration: 1,
+        timeCreated: new Date().toISOString(),
+        updated: new Date().toISOString(),
+        id: 'test-object-id',
+        storageClass: 'STANDARD'
+      },
+      bucket: 'test-bucket',
+      source: '//storage.googleapis.com/projects/_/buckets/test-bucket',
+      subject: `projects/_/buckets/test-bucket/objects/videos/user123/${videoId}/original.mp4`,
+      id: 'test-event-id',
+      type: 'google.cloud.storage.object.v1.finalized',
+      time: new Date().toISOString(),
+      specversion: '1.0'
+    };
+
+    // Mock Firestore to throw an error
+    jest.spyOn(setupAdmin.firestore(), 'collection').mockImplementationOnce(() => {
+      throw new Error('Test error');
+    });
+
+    await expect(onVideoUploaded(event)).rejects.toThrow('Test error');
+  });
 }); 

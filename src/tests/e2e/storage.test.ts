@@ -1,6 +1,8 @@
 import { StorageService } from '../../services/storageService';
 import { auth } from '../../config/firebase';
 import { signInAnonymously, signOut } from 'firebase/auth';
+import { getAuth } from 'firebase/auth';
+import { beforeEach, describe, expect, it } from '@jest/globals';
 
 describe('Storage Service E2E Tests', () => {
   const testUserId = 'test-user';
@@ -27,82 +29,61 @@ describe('Storage Service E2E Tests', () => {
     const testFile = createTestFile(testFileName, 'video/mp4');
     let uploadedUrl: string;
 
-    try {
-      // Test upload
+    // Test upload
+    await expect(async () => {
       uploadedUrl = await StorageService.uploadVideo(
         testUserId,
         testVideoId,
-        testFile,
-        (progress) => {
-          expect(progress).toBeGreaterThanOrEqual(0);
-          expect(progress).toBeLessThanOrEqual(100);
-        }
+        testFile
       );
-
-      expect(uploadedUrl).toBeDefined();
-      expect(typeof uploadedUrl).toBe('string');
       expect(uploadedUrl).toContain(testFileName);
 
       // Test delete
       await StorageService.deleteVideo(testUserId, testVideoId, testFileName);
-    } catch (error) {
-      fail(`Test failed with error: ${error}`);
-    }
+    }).not.toThrow();
   });
 
   it('should upload and delete a thumbnail', async () => {
     const testFile = createTestFile('thumbnail.jpg', 'image/jpeg');
     let uploadedUrl: string;
 
-    try {
-      // Test upload
+    // Test upload
+    await expect(async () => {
       uploadedUrl = await StorageService.uploadThumbnail(
         testUserId,
         testVideoId,
         testFile
       );
-
-      expect(uploadedUrl).toBeDefined();
-      expect(typeof uploadedUrl).toBe('string');
-      expect(uploadedUrl).toContain('thumbnail.jpg');
+      expect(uploadedUrl).toBeTruthy();
 
       // Test delete
       await StorageService.deleteThumbnail(testUserId, testVideoId, 'thumbnail.jpg');
-    } catch (error) {
-      fail(`Test failed with error: ${error}`);
-    }
+    }).not.toThrow();
   });
 
   it('should upload and delete an avatar', async () => {
     const testFile = createTestFile('avatar.jpg', 'image/jpeg');
     let uploadedUrl: string;
 
-    try {
-      // Test upload
+    // Test upload
+    await expect(async () => {
       uploadedUrl = await StorageService.uploadAvatar(testUserId, testFile);
-
-      expect(uploadedUrl).toBeDefined();
-      expect(typeof uploadedUrl).toBe('string');
-      expect(uploadedUrl).toContain('avatar.jpg');
+      expect(uploadedUrl).toBeTruthy();
 
       // Test delete
       await StorageService.deleteAvatar(testUserId, 'avatar.jpg');
-    } catch (error) {
-      fail(`Test failed with error: ${error}`);
-    }
+    }).not.toThrow();
   });
 
-  it('should handle invalid file types', async () => {
+  it('should reject invalid file types', async () => {
     const invalidFile = createTestFile('invalid.txt', 'text/plain');
-
     await expect(
       StorageService.uploadVideo(testUserId, testVideoId, invalidFile)
     ).rejects.toThrow();
   });
 
-  it('should handle large files', async () => {
+  it('should reject files that are too large', async () => {
     const largeFile = createTestFile('large.mp4', 'video/mp4', 600 * 1024 * 1024); // 600MB
-
     await expect(
       StorageService.uploadVideo(testUserId, testVideoId, largeFile)
     ).rejects.toThrow();

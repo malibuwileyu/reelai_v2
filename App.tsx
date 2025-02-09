@@ -1,34 +1,66 @@
 import React from 'react';
 import { AuthProvider, useAuthContext } from './src/providers/AuthProvider';
+import { NavigationProvider, useNavigation } from './src/providers/NavigationProvider';
 import { LoginScreen } from './src/screens/auth/LoginScreen';
-import { RegisterScreen } from './src/screens/auth/RegisterScreen';
-import { Layout } from './src/components/shared/Layout';
-import { View, Text } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 
-const HomeScreen = () => {
+const DevMenu = () => {
+  const { navigate } = useNavigation();
+  
   return (
-    <Layout>
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-        <Text style={{ color: '#fff', fontSize: 24 }}>Welcome to ReelAI!</Text>
-      </View>
-    </Layout>
+    <View style={styles.devMenu}>
+      <TouchableOpacity 
+        style={styles.devButton}
+        onPress={() => navigate('test')}
+      >
+        <Text style={styles.devButtonText}>🧪 Test Screens</Text>
+      </TouchableOpacity>
+    </View>
   );
 };
 
 const AppContent = () => {
   const { user } = useAuthContext();
-
+  
   if (!user) {
     return <LoginScreen />;
   }
-
-  return <HomeScreen />;
+  
+  return (
+    <NavigationProvider>
+      <>
+        {/* Main app content will go here */}
+        {__DEV__ && <DevMenu />}
+      </>
+    </NavigationProvider>
+  );
 };
 
-export default function App() {
-  return (
-    <AuthProvider>
-      <AppContent />
-    </AuthProvider>
-  );
-} 
+const App = () => (
+  <AuthProvider>
+    <AppContent />
+  </AuthProvider>
+);
+
+const styles = StyleSheet.create({
+  devMenu: {
+    position: 'absolute',
+    bottom: 90, // Above the footer
+    right: 20,
+    backgroundColor: '#1a1a1a',
+    borderRadius: 8,
+    padding: 8,
+    borderWidth: 1,
+    borderColor: '#333',
+  },
+  devButton: {
+    padding: 8,
+  },
+  devButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+});
+
+export default App; 

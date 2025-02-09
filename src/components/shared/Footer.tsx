@@ -1,10 +1,29 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 
-export const Footer: React.FC = () => {
+interface FooterProps {
+  currentScreen: 'home' | 'learn' | 'upload' | 'profile';
+  onNavigate: (screen: 'home' | 'learn' | 'upload' | 'profile') => void;
+}
+
+export const Footer: React.FC<FooterProps> = ({ currentScreen, onNavigate }) => {
+  const NavButton = ({ screen, label }: { screen: 'home' | 'learn' | 'upload' | 'profile'; label: string }) => (
+    <TouchableOpacity
+      style={[styles.navButton, currentScreen === screen && styles.activeNavButton]}
+      onPress={() => onNavigate(screen)}
+    >
+      <Text style={[styles.navText, currentScreen === screen && styles.activeNavText]}>
+        {label}
+      </Text>
+    </TouchableOpacity>
+  );
+
   return (
     <View style={styles.container}>
-      <Text style={styles.copyright}>© 2024 ReelAI. All rights reserved.</Text>
+      <NavButton screen="home" label="Home" />
+      <NavButton screen="learn" label="Learn" />
+      <NavButton screen="upload" label="Upload" />
+      <NavButton screen="profile" label="Profile" />
     </View>
   );
 };
@@ -13,13 +32,28 @@ const styles = StyleSheet.create({
   container: {
     height: 50,
     backgroundColor: '#1a1a1a',
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    justifyContent: 'space-around',
     borderTopWidth: 1,
     borderTopColor: '#333',
   },
-  copyright: {
+  navButton: {
+    flex: 1,
+    height: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  activeNavButton: {
+    borderTopWidth: 2,
+    borderTopColor: '#007AFF',
+  },
+  navText: {
     color: '#666',
     fontSize: 12,
+  },
+  activeNavText: {
+    color: '#007AFF',
+    fontWeight: 'bold',
   },
 }); 

@@ -6,8 +6,8 @@ import {
   TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
+  SafeAreaView,
 } from 'react-native';
-import { Layout } from '../../components/shared/Layout';
 import { useAuthContext } from '../../providers/AuthProvider';
 import { showToast } from '../../utils/toast';
 
@@ -49,7 +49,7 @@ export const LoginScreen: React.FC = () => {
   };
 
   return (
-    <Layout hideHeader hideFooter>
+    <SafeAreaView style={styles.root}>
       <View style={styles.container}>
         <View style={styles.form}>
           <Text style={styles.title}>Welcome Back</Text>
@@ -118,11 +118,15 @@ export const LoginScreen: React.FC = () => {
           </View>
         </View>
       </View>
-    </Layout>
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
+  root: {
+    flex: 1,
+    backgroundColor: '#000',
+  },
   container: {
     flex: 1,
     justifyContent: 'center',
