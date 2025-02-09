@@ -1,6 +1,8 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { Auth, signInAnonymously, signInWithEmailAndPassword, signOut, User } from 'firebase/auth';
 import { auth } from '../config/firebase';
+import { AuthPersistenceService } from '../services/authPersistence';
+import { showToast } from '../utils/toast';
 
 interface AuthContextType {
   user: User | null;
@@ -17,11 +19,41 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unsubscribe = (auth as Auth).onAuthStateChanged((user: User | null) => {
-      setUser(user);
+    // Check for persisted user on mount
+    const initializeAuth = async () => {
+      try {
+        const persistedUser = await AuthPersistenceService.getUser();
+        if (persistedUser) {
+          setUser(persistedUser as User);
+        }
+      } catch (error) {
+        console.error('Error loading persisted user:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    // Listen for auth state changes
+    const unsubscribe = (auth as Auth).onAuthStateChanged(async (user: User | null) => {
+      if (user) {
+        try {
+          await AuthPersistenceService.saveUser(user);
+          setUser(user);
+        } catch (error) {
+          console.error('Error saving user:', error);
+        }
+      } else {
+        try {
+          await AuthPersistenceService.clearAuth();
+          setUser(null);
+        } catch (error) {
+          console.error('Error clearing auth:', error);
+        }
+      }
       setLoading(false);
     });
 
+    initializeAuth();
     return () => unsubscribe();
   }, []);
 
@@ -29,6 +61,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setLoading(true);
     try {
       await signInWithEmailAndPassword(auth as Auth, email, password);
+      showToast('Successfully signed in!', 'success');
+    } catch (error: any) {
+      console.error('Sign in error:', error);
+      showToast(error.message || 'Failed to sign in', 'error');
+      throw error;
     } finally {
       setLoading(false);
     }
@@ -38,6 +75,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setLoading(true);
     try {
       await signInAnonymously(auth as Auth);
+      showToast('Signed in as guest', 'success');
+    } catch (error: any) {
+      console.error('Anonymous sign in error:', error);
+      showToast(error.message || 'Failed to sign in as guest', 'error');
+      throw error;
     } finally {
       setLoading(false);
     }
@@ -47,6 +89,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setLoading(true);
     try {
       await signOut(auth as Auth);
+      await AuthPersistenceService.clearAuth();
+      showToast('Successfully signed out', 'success');
+    } catch (error: any) {
+      console.error('Sign out error:', error);
+      showToast(error.message || 'Failed to sign out', 'error');
+      throw error;
     } finally {
       setLoading(false);
     }
