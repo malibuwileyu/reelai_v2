@@ -18,14 +18,21 @@ export interface Video {
   id: string;
   title: string;
   description: string;
-  url: string;
+  videoUrl: string;
   thumbnailUrl: string;
-  userId: string;
+  creatorId: string;
   userName: string;
   views: number;
   likes: number;
   createdAt: Date;
   updatedAt: Date;
+  isPublic: boolean;
+  category: 'education' | 'tutorial' | 'lecture' | 'presentation' | 'other';
+  tags: string[];
+  language: string;
+  difficulty?: 'beginner' | 'intermediate' | 'advanced';
+  metadata: VideoMetadata;
+  duration: number;
 }
 
 export interface VideoCreate extends Omit<Video, 'id' | 'createdAt' | 'updatedAt' | 'views' | 'likes' | 'shareCount'> {

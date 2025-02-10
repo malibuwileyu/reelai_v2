@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it } from '@jest/globals';
 import { videoService } from '../services/videoService';
 import { doc, getDoc } from 'firebase/firestore';
 import { COLLECTIONS } from '../../../constants';
+import { VideoUploadProgress } from '../types';
 
 describe('Video Upload E2E Tests', () => {
   beforeEach(async () => {
@@ -27,11 +28,11 @@ describe('Video Upload E2E Tests', () => {
     });
 
     // Wait for upload to complete or fail
-    let uploadProgress;
+    let uploadProgress: VideoUploadProgress;
     do {
       uploadProgress = await videoService.getUploadProgress(videoId);
-      if (uploadProgress.state === 'error') {
-        throw new Error(`Upload failed: ${uploadProgress.error}`);
+      if (uploadProgress.state === 'error' && uploadProgress.error) {
+        throw new Error(`Upload failed: ${uploadProgress.error.message}`);
       }
       await new Promise(resolve => setTimeout(resolve, 100)); // Wait 100ms between checks
     } while (uploadProgress.state === 'running');
@@ -60,7 +61,7 @@ describe('Video Upload E2E Tests', () => {
     videoService.cancelUpload(videoId);
 
     // Wait for cancellation to complete
-    let uploadProgress;
+    let uploadProgress: VideoUploadProgress;
     do {
       uploadProgress = await videoService.getUploadProgress(videoId);
       await new Promise(resolve => setTimeout(resolve, 100));
@@ -86,7 +87,7 @@ describe('Video Upload E2E Tests', () => {
     const { videoId } = await videoService.uploadVideo(testFile, { title: 'Invalid File' });
 
     // Wait for upload to fail
-    let uploadProgress;
+    let uploadProgress: VideoUploadProgress;
     do {
       uploadProgress = await videoService.getUploadProgress(videoId);
       await new Promise(resolve => setTimeout(resolve, 100));

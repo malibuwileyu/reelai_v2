@@ -1,12 +1,14 @@
 import { initializeApp, getApps, FirebaseApp } from 'firebase/app';
-import { getAuth, Auth } from 'firebase/auth';
+import { getAuth, Auth, connectAuthEmulator } from 'firebase/auth';
 import { 
   getFirestore, 
   Firestore, 
   initializeFirestore,
   persistentLocalCache,
-  persistentMultipleTabManager 
+  persistentMultipleTabManager,
+  connectFirestoreEmulator
 } from 'firebase/firestore';
+import { getStorage, FirebaseStorage, connectStorageEmulator } from 'firebase/storage';
 
 // Validate environment variables
 const validateEnvVariables = () => {
@@ -48,6 +50,7 @@ validateEnvVariables();
 let app: FirebaseApp;
 let auth: Auth;
 let db: Firestore;
+let storage: FirebaseStorage;
 
 try {
   // Initialize or get existing app
@@ -61,15 +64,29 @@ try {
     })
   });
 
-  console.log('Firebase Config Used:', firebaseConfig);
+  // Initialize Storage
+  storage = getStorage(app);
+
+  // Only connect to emulators in test environment
+  if (process.env.NODE_ENV === 'test') {
+    connectAuthEmulator(auth, 'http://localhost:9099');
+    connectFirestoreEmulator(db, 'localhost', 8080);
+    connectStorageEmulator(storage, 'localhost', 9199);
+    console.log('Connected to Firebase emulators');
+  } else {
+    console.log('Using production Firebase instance');
+  }
+
   console.log('Firebase initialized successfully:', {
     appInitialized: !!app,
     authInitialized: !!auth,
-    dbInitialized: !!db
+    dbInitialized: !!db,
+    storageInitialized: !!storage,
+    environment: process.env.NODE_ENV
   });
 } catch (error) {
   console.error('Firebase initialization error:', error);
   throw error;
 }
 
-export { app, auth, db }; 
+export { app, auth, db, storage }; 

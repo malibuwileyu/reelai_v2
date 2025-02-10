@@ -21,7 +21,8 @@ import { CommentsScreen } from '../screens/video/CommentsScreen';
 import { ShareScreen } from '../screens/video/ShareScreen';
 import { QuizScreen } from '../screens/learn/QuizScreen';
 import { StudyNotesScreen } from '../screens/learn/StudyNotesScreen';
-import type { NavigationScreen, NavigationParams } from '../navigation/types';
+import { NavigationScreen, NavigationParams } from '../navigation/types';
+import { useAuthContext } from './AuthProvider';
 
 // Base screens
 export type Screen = 'home' | 'learn' | 'upload' | 'profile' | 'test' | 'login' | 'register' | 'achievements' | 'videoUpload' | 'processingQueue' | 'aiEnhancement' | 'subjectDetail' | 'pathDetail' | 'editProfile' | 'videoLibrary' | 'settings' | 'comments' | 'share' | 'quiz' | 'studyNotes';
@@ -70,7 +71,8 @@ interface NavigationContextType {
 const NavigationContext = createContext<NavigationContextType | undefined>(undefined);
 
 export const NavigationProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [currentScreen, setCurrentScreen] = useState<NavigationScreen>('home');
+  const { user } = useAuthContext();
+  const [currentScreen, setCurrentScreen] = useState<NavigationScreen>(user ? 'home' : 'login');
   const [params, setParams] = useState<Partial<NavigationParams[NavigationScreen]>>({});
 
   const navigate: NavigateFunction = useCallback((screen, newParams) => {
@@ -143,14 +145,13 @@ export const NavigationProvider: React.FC<{ children: ReactNode }> = ({ children
       case 'settings':
         return <SettingsScreen />;
       default:
-        return <HomeScreen />;
+        return user ? <HomeScreen /> : <LoginScreen />;
     }
   };
 
   return (
     <NavigationContext.Provider value={{ currentScreen, navigate }}>
       {renderScreen()}
-      {children}
     </NavigationContext.Provider>
   );
 };

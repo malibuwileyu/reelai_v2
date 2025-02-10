@@ -29,9 +29,9 @@ export const HomeScreen: React.FC = () => {
           <Text style={styles.sectionTitle}>Videos</Text>
           <TouchableOpacity 
             style={styles.button}
-            onPress={() => navigate('videoDetail', { videoId: 'test-video-id' })}
+            onPress={() => navigate('videoLibrary')}
           >
-            <Text style={styles.buttonText}>📺 Sample Video Detail</Text>
+            <Text style={styles.buttonText}>📺 Video Library</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>

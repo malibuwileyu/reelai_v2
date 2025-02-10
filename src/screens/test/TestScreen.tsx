@@ -84,6 +84,18 @@ export const TestScreen: React.FC = () => {
             onPress={() => navigate('register')} 
           />
         </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>🧪 Component Tests</Text>
+          <TestButton 
+            title="Test Video Upload" 
+            onPress={() => navigate('videoUpload')} 
+          />
+          <TestButton 
+            title="Test Video Player" 
+            onPress={() => navigate('videoDetail', { videoId: 'test-video-id' })} 
+          />
+        </View>
       </ScrollView>
     } />
   );

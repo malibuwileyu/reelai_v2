@@ -1,46 +1,25 @@
 import React from 'react';
-import { AuthProvider, useAuthContext } from './src/providers/AuthProvider';
-import { NavigationProvider, useNavigation } from './src/providers/NavigationProvider';
-import { LoginScreen } from './src/screens/auth/LoginScreen';
+import { AuthProvider } from './src/providers/AuthProvider';
+import { NavigationProvider } from './src/providers/NavigationProvider';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 
+const App = () => (
+  <AuthProvider>
+    <NavigationProvider>
+      {__DEV__ && <DevMenu />}
+    </NavigationProvider>
+  </AuthProvider>
+);
+
 const DevMenu = () => {
-  const { navigate } = useNavigation();
-  
   return (
     <View style={styles.devMenu}>
-      <TouchableOpacity 
-        style={styles.devButton}
-        onPress={() => navigate('test')}
-      >
+      <TouchableOpacity style={styles.devButton}>
         <Text style={styles.devButtonText}>🧪 Test Screens</Text>
       </TouchableOpacity>
     </View>
   );
 };
-
-const AppContent = () => {
-  const { user } = useAuthContext();
-  
-  if (!user) {
-    return <LoginScreen />;
-  }
-  
-  return (
-    <NavigationProvider>
-      <>
-        {/* Main app content will go here */}
-        {__DEV__ && <DevMenu />}
-      </>
-    </NavigationProvider>
-  );
-};
-
-const App = () => (
-  <AuthProvider>
-    <AppContent />
-  </AuthProvider>
-);
 
 const styles = StyleSheet.create({
   devMenu: {

@@ -1,13 +1,16 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { Auth, signInAnonymously, signInWithEmailAndPassword, signOut, User } from 'firebase/auth';
-import { auth } from '../config/firebase';
+import { Auth, signInAnonymously, signInWithEmailAndPassword, signOut, User, createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
+import { doc, setDoc, serverTimestamp, getDoc } from 'firebase/firestore';
+import { auth, db } from '../config/firebase';
 import { AuthPersistenceService } from '../services/authPersistence';
 import { showToast } from '../utils/toast';
+import { COLLECTIONS } from '../constants';
 
 interface AuthContextType {
   user: User | null;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<void>;
+  signUp: (email: string, password: string, displayName: string) => Promise<void>;
   signInAnon: () => Promise<void>;
   signOut: () => Promise<void>;
 }
@@ -60,11 +63,111 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const handleSignIn = async (email: string, password: string) => {
     setLoading(true);
     try {
-      await signInWithEmailAndPassword(auth as Auth, email, password);
+      console.log('[AuthProvider] Starting sign in for:', email);
+      
+      // Sign in with Firebase Auth
+      const userCredential = await signInWithEmailAndPassword(auth as Auth, email, password);
+      const user = userCredential.user;
+      console.log('[AuthProvider] Signed in user:', user.uid);
+
+      // Check if user document exists
+      const userDocRef = doc(db, COLLECTIONS.USERS, user.uid);
+      const userDoc = await getDoc(userDocRef);
+      
+      if (!userDoc.exists()) {
+        console.log('[AuthProvider] User document not found, creating...');
+        // Create user document if it doesn't exist
+        await setDoc(userDocRef, {
+          id: user.uid,
+          email: user.email,
+          displayName: user.displayName || `user_${user.uid}`,
+          photoURL: user.photoURL,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+          followers: 0,
+          videosCount: 0,
+          followingCount: 0,
+          profileCompleted: false,
+          onboardingCompleted: false,
+          accountType: 'user',
+          currentStreak: 0,
+          longestStreak: 0,
+          lastWatchedDate: null,
+          preferences: {
+            language: 'en',
+            theme: 'dark',
+            notifications: true
+          }
+        });
+        console.log('[AuthProvider] Created missing user document');
+      } else {
+        console.log('[AuthProvider] User document exists');
+      }
+
       showToast('Successfully signed in!', 'success');
     } catch (error: any) {
-      console.error('Sign in error:', error);
+      console.error('[AuthProvider] Sign in error:', error);
       showToast(error.message || 'Failed to sign in', 'error');
+      throw error;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSignUp = async (email: string, password: string, displayName: string) => {
+    try {
+      setLoading(true);
+      console.log('[AuthProvider] Starting sign up for:', email);
+      
+      // Create Firebase Auth user
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      const user = userCredential.user;
+      console.log('[AuthProvider] Created auth user:', user.uid);
+
+      // Create user document in Firestore
+      const userDocRef = doc(db, COLLECTIONS.USERS, user.uid);
+      console.log('[AuthProvider] Creating user document at:', userDocRef.path);
+      
+      await setDoc(userDocRef, {
+        id: user.uid,
+        email: user.email,
+        displayName: displayName || `user_${user.uid}`,
+        photoURL: null,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        followers: 0,
+        videosCount: 0,
+        followingCount: 0,
+        profileCompleted: false,
+        onboardingCompleted: false,
+        accountType: 'user',
+        currentStreak: 0,
+        longestStreak: 0,
+        lastWatchedDate: null,
+        preferences: {
+          language: 'en',
+          theme: 'dark',
+          notifications: true
+        }
+      });
+      console.log('[AuthProvider] User document created successfully');
+
+      // Update profile
+      await updateProfile(user, {
+        displayName: displayName
+      });
+      console.log('[AuthProvider] Updated user profile');
+
+      // Save to persistence
+      await AuthPersistenceService.saveUser(user);
+      console.log('[AuthProvider] Saved user to persistence');
+
+      // Set user in state
+      setUser(user);
+      showToast('Successfully signed up!', 'success');
+    } catch (error: any) {
+      console.error('[AuthProvider] Signup error:', error);
+      showToast(error.message || 'Failed to sign up', 'error');
       throw error;
     } finally {
       setLoading(false);
@@ -74,7 +177,40 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const handleSignInAnon = async () => {
     setLoading(true);
     try {
-      await signInAnonymously(auth as Auth);
+      // Sign in anonymously
+      const userCredential = await signInAnonymously(auth as Auth);
+      const user = userCredential.user;
+
+      // Create user document in Firestore
+      const userDocRef = doc(db, 'users', user.uid);
+      await setDoc(userDocRef, {
+        id: user.uid,
+        email: null,
+        displayName: `Guest_${user.uid.slice(0, 6)}`,
+        photoURL: null,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        followers: 0,
+        videosCount: 0,
+        followingCount: 0,
+        profileCompleted: false,
+        onboardingCompleted: false,
+        accountType: 'anonymous',
+        currentStreak: 0,
+        longestStreak: 0,
+        lastWatchedDate: null,
+        preferences: {
+          language: 'en',
+          theme: 'dark',
+          notifications: true
+        }
+      });
+
+      // Save to persistence
+      await AuthPersistenceService.saveUser(user);
+
+      // Set user in state
+      setUser(user);
       showToast('Signed in as guest', 'success');
     } catch (error: any) {
       console.error('Anonymous sign in error:', error);
@@ -104,6 +240,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     user,
     loading,
     signIn: handleSignIn,
+    signUp: handleSignUp,
     signInAnon: handleSignInAnon,
     signOut: handleSignOut,
   };

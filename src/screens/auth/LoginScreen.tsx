@@ -10,11 +10,13 @@ import {
 } from 'react-native';
 import { useAuthContext } from '../../providers/AuthProvider';
 import { showToast } from '../../utils/toast';
+import { useNavigation } from '../../providers/NavigationProvider';
 
 export const LoginScreen: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const { signIn, signInAnon, loading } = useAuthContext();
+  const { navigate } = useNavigation();
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -25,6 +27,7 @@ export const LoginScreen: React.FC = () => {
     try {
       await signIn(email, password);
       showToast('Successfully logged in!', 'success');
+      navigate('home');
     } catch (error: any) {
       showToast(error.message || 'Failed to login', 'error');
     }
@@ -34,6 +37,7 @@ export const LoginScreen: React.FC = () => {
     try {
       await signInAnon();
       showToast('Signed in anonymously', 'success');
+      navigate('home');
     } catch (error: any) {
       showToast(error.message || 'Failed to sign in anonymously', 'error');
     }
@@ -43,6 +47,7 @@ export const LoginScreen: React.FC = () => {
     try {
       await signIn('test1@example.com', 'password123');
       showToast('Successfully logged in with test account!', 'success');
+      navigate('home');
     } catch (error: any) {
       showToast(error.message || 'Failed to login with test account', 'error');
     }
@@ -112,7 +117,7 @@ export const LoginScreen: React.FC = () => {
 
           <View style={styles.footer}>
             <Text style={styles.footerText}>Don't have an account? </Text>
-            <TouchableOpacity>
+            <TouchableOpacity onPress={() => navigate('register')}>
               <Text style={styles.footerLink}>Sign Up</Text>
             </TouchableOpacity>
           </View>

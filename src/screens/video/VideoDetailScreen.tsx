@@ -1,13 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Image } from 'react-native';
 import { Layout } from '../../components/shared/Layout';
-import { Video as ExpoVideo, ResizeMode } from 'expo-av';
 import { Video } from '../../models/Video';
 import { VideoService } from '../../features/home/services/videoService';
 import { useNavigation } from '../../providers/NavigationProvider';
 import { showToast } from '../../utils/toast';
 import { useAuthContext } from '../../providers/AuthProvider';
 import { Timestamp } from 'firebase/firestore';
+import { VideoPlayer } from '../../components/video/VideoPlayer';
 
 interface Props {
   videoId: string;
@@ -88,19 +88,18 @@ export const VideoDetailScreen: React.FC<Props> = ({ videoId }) => {
         </View>
 
         <View style={styles.videoContainer}>
-          {video.thumbnailUrl && !video.url && (
+          {video.thumbnailUrl && !video.videoUrl && (
             <Image
               source={{ uri: video.thumbnailUrl }}
               style={styles.thumbnail}
               resizeMode="cover"
             />
           )}
-          {video.url && (
-            <ExpoVideo
-              source={{ uri: video.url }}
+          {video.videoUrl && (
+            <VideoPlayer
+              videoId={videoId}
+              videoUrl={video.videoUrl}
               style={styles.video}
-              useNativeControls
-              resizeMode={ResizeMode.CONTAIN}
               shouldPlay={false}
             />
           )}

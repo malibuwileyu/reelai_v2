@@ -16,6 +16,7 @@ export interface VideoUploadOptions {
   tags?: string[];
   language?: string;
   difficulty?: string;
+  onProgress?: (progress: VideoUploadProgress) => void;
 }
 
 export interface VideoUploadResponse {

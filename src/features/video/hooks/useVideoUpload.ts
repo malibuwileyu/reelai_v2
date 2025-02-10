@@ -1,9 +1,9 @@
 import { useState, useCallback, useEffect } from 'react';
 import { videoService } from '../services/videoService';
-import { VideoUploadOptions, VideoUploadProgress, VideoUploadResponse } from '../types';
+import { VideoUploadOptions, VideoUploadProgress, VideoUploadResponse, VideoMetadata } from '../../../types/video';
 
 interface UseVideoUploadResult {
-  uploadVideo: (file: File, options: VideoUploadOptions) => Promise<void>;
+  uploadVideo: (file: File, metadata: VideoMetadata) => Promise<VideoUploadResponse>;
   cancelUpload: () => Promise<void>;
   progress: VideoUploadProgress | null;
   error: Error | null;
@@ -51,17 +51,47 @@ export function useVideoUpload(): UseVideoUploadResult {
     return () => clearInterval(intervalId);
   }, [videoId, isUploading]);
 
-  const uploadVideo = useCallback(async (file: File, options: VideoUploadOptions) => {
+  const uploadVideo = useCallback(async (file: File, metadata: VideoMetadata): Promise<VideoUploadResponse> => {
     try {
       setError(null);
       setIsUploading(true);
       setProgress(null);
 
+      const options: VideoUploadOptions = {
+        metadata,
+        onProgress: (progress) => setProgress(progress)
+      };
+
       const response = await videoService.uploadVideo(file, options);
       setVideoId(response.videoId);
+
+      // Wait for upload to complete
+      return new Promise((resolve, reject) => {
+        const checkProgress = setInterval(async () => {
+          try {
+            const currentProgress = await videoService.getUploadProgress(response.videoId);
+            setProgress(currentProgress);
+
+            if (currentProgress.state === 'success') {
+              clearInterval(checkProgress);
+              setIsUploading(false);
+              resolve(response);
+            } else if (currentProgress.state === 'error') {
+              clearInterval(checkProgress);
+              setIsUploading(false);
+              reject(new Error('Upload failed'));
+            }
+          } catch (error) {
+            clearInterval(checkProgress);
+            setIsUploading(false);
+            reject(error);
+          }
+        }, 1000);
+      });
     } catch (error) {
       setError(error as Error);
       setIsUploading(false);
+      throw error;
     }
   }, []);
 

@@ -2,9 +2,49 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Allow all operations during testing when using emulator
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isUserData(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // Allow all operations in test environment
+    function isTestEnv() {
+      return request.resource.data.testEnv == true || resource.data.testEnv == true;
+    }
+
+    // Videos collection rules
+    match /videos/{videoId} {
+      allow read: if true;
+      allow write: if isAuthenticated();
+    }
+
+    // Progress collection rules
+    match /progress/{progressId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    // Users collection rules
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      
+      // Allow all writes to user documents if authenticated
+      allow write: if isAuthenticated();
+
+      // Allow streak updates
+      allow update: if 
+        isTestEnv() ||
+        (isUserData(userId) && 
+         request.resource.data.diff(resource.data).affectedKeys()
+           .hasOnly(['lastWatchedDate', 'currentStreak', 'longestStreak', 'updatedAt']));
+    }
+
+    // Default allow for development
     match /{document=**} {
-      allow read, write: if request.auth != null || true;
+      allow read, write: if isAuthenticated();
     }
   }
 } 

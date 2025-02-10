@@ -32,9 +32,14 @@ export interface User {
   profileCompleted: boolean;
   onboardingCompleted: boolean;
   accountType: string;
+
+  // Streak tracking
+  lastWatchedDate?: string;     // ISO date string (YYYY-MM-DD)
+  currentStreak: number;       // Current daily watch streak
+  longestStreak: number;      // Longest daily watch streak achieved
 }
 
-export interface UserCreate extends Omit<User, 'id' | 'createdAt' | 'updatedAt' | 'followers' | 'videosCount' | 'followingCount'> {
+export interface UserCreate extends Omit<User, 'id' | 'createdAt' | 'updatedAt' | 'followers' | 'videosCount' | 'followingCount' | 'currentStreak' | 'longestStreak'> {
   id?: string;
 }
 

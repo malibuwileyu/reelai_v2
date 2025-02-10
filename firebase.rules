@@ -45,16 +45,38 @@ service cloud.firestore {
         && data.milestones is list;
     }
     
+    function debug(msg, data) {
+      return msg;
+    }
+    
     // Video rules
     match /videos/{videoId} {
-      allow read: if resource.data.isPublic == true || 
-                   (isAuthenticated() && resource.data.creatorId == request.auth.uid);
+      allow read: if 
+        debug('Checking video read access', {
+          'isPublic': resource.data.isPublic,
+          'resourceCreatorId': resource.data.creatorId,
+          'requestAuthUid': request.auth.uid,
+          'hasQueryFilters': request.query.filters != null,
+          'queryFilters': request.query.filters,
+          'queryLimit': request.query.limit
+        }) && (
+          resource.data.isPublic == true || 
+          (isAuthenticated() && resource.data.creatorId == request.auth.uid) ||
+          // Allow listing videos with proper query constraints
+          (isAuthenticated() && 
+           request.query.limit <= 50 && 
+           'creatorId' in request.query.filters && 
+           request.query.filters.creatorId == request.auth.uid)
+        );
+      
       allow create: if isAuthenticated() 
         && isValidVideoData(request.resource.data)
         && request.resource.data.creatorId == request.auth.uid;
+      
       allow update: if isAuthenticated() 
         && resource.data.creatorId == request.auth.uid
         && isValidVideoData(request.resource.data);
+      
       allow delete: if isAuthenticated() 
         && resource.data.creatorId == request.auth.uid;
     }

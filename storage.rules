@@ -2,11 +2,31 @@ rules_version = '2';
 
 service firebase.storage {
   match /b/{bucket}/o {
-    // Allow all operations during testing when using emulator
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // Videos - users can only write to their own directory
+    match /videos/{userId}/{videoId}/{fileName} {
+      allow read: if true;
+      allow write: if isOwner(userId);
+    }
+
+    // Thumbnails - same rules as videos
+    match /thumbnails/{userId}/{videoId}/{fileName} {
+      allow read: if true;
+      allow write: if isOwner(userId);
+    }
+
+    // Default deny
     match /{allPaths=**} {
-      allow read, write: if request.resource == null || 
-        request.resource.size < 10 * 1024 * 1024 && // 10MB max file size
-        (request.auth != null || true); // Allow both authenticated and unauthenticated access in test
+      allow read: if true;
+      allow write: if false;
     }
   }
 } 

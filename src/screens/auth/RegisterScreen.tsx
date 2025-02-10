@@ -10,6 +10,7 @@ import {
 import { Layout } from '../../components/shared/Layout';
 import { useAuthContext } from '../../providers/AuthProvider';
 import { showToast } from '../../utils/toast';
+import { useNavigation } from '../../providers/NavigationProvider';
 
 export const RegisterScreen: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -17,6 +18,7 @@ export const RegisterScreen: React.FC = () => {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [displayName, setDisplayName] = useState('');
   const { signUp, loading } = useAuthContext();
+  const { navigate } = useNavigation();
 
   const handleRegister = async () => {
     if (!email || !password || !confirmPassword || !displayName) {
@@ -32,6 +34,7 @@ export const RegisterScreen: React.FC = () => {
     try {
       await signUp(email, password, displayName);
       showToast('Account created successfully!', 'success');
+      navigate('home');
     } catch (error: any) {
       showToast(error.message || 'Failed to create account', 'error');
     }
@@ -50,6 +53,7 @@ export const RegisterScreen: React.FC = () => {
             placeholderTextColor="#666"
             value={displayName}
             onChangeText={setDisplayName}
+            testID="displayName-input"
           />
 
           <TextInput
@@ -60,6 +64,7 @@ export const RegisterScreen: React.FC = () => {
             onChangeText={setEmail}
             autoCapitalize="none"
             keyboardType="email-address"
+            testID="email-input"
           />
 
           <TextInput
@@ -69,6 +74,7 @@ export const RegisterScreen: React.FC = () => {
             value={password}
             onChangeText={setPassword}
             secureTextEntry
+            testID="password-input"
           />
 
           <TextInput
@@ -78,12 +84,14 @@ export const RegisterScreen: React.FC = () => {
             value={confirmPassword}
             onChangeText={setConfirmPassword}
             secureTextEntry
+            testID="confirm-password-input"
           />
 
           <TouchableOpacity
             style={styles.button}
             onPress={handleRegister}
             disabled={loading}
+            testID="signup-button"
           >
             {loading ? (
               <ActivityIndicator color="#fff" />
@@ -94,7 +102,7 @@ export const RegisterScreen: React.FC = () => {
 
           <View style={styles.footer}>
             <Text style={styles.footerText}>Already have an account? </Text>
-            <TouchableOpacity>
+            <TouchableOpacity onPress={() => navigate('login')}>
               <Text style={styles.footerLink}>Sign In</Text>
             </TouchableOpacity>
           </View>

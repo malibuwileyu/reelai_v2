@@ -1,5 +1,5 @@
 import { getStorage, ref, uploadBytesResumable, getDownloadURL, deleteObject } from 'firebase/storage';
-import { app } from '../config/firebase';
+import { app, auth } from '../config/firebase';
 
 const storage = getStorage(app);
 
@@ -18,7 +18,17 @@ export class StorageService {
     file: File,
     onProgress?: UploadProgressCallback
   ): Promise<string> {
+    // Debug logs
+    console.log('[StorageService] Current auth state:', {
+      currentUser: auth.currentUser?.uid,
+      isAuthenticated: !!auth.currentUser,
+      uploadingForUser: userId,
+      token: await auth.currentUser?.getIdToken(),
+    });
+
     const path = `videos/${userId}/${videoId}/${file.name}`;
+    console.log('[StorageService] Uploading to path:', path);
+    
     const storageRef = ref(storage, path);
     
     try {

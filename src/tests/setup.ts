@@ -1,9 +1,14 @@
 /// <reference types="jest" />
 import '@testing-library/jest-native/extend-expect';
-import { initializeApp } from 'firebase/app';
+import { initializeApp, getApps, deleteApp } from 'firebase/app';
 import { getAuth, connectAuthEmulator } from 'firebase/auth';
-import { getFirestore, connectFirestoreEmulator } from 'firebase/firestore';
+import { getFirestore, connectFirestoreEmulator, initializeFirestore, FirestoreSettings } from 'firebase/firestore';
 import { getStorage, connectStorageEmulator } from 'firebase/storage';
+
+// Add type declaration for global
+declare global {
+  var wrapFirestoreData: <T extends Record<string, unknown>>(data: T) => T & { testEnv: boolean };
+}
 
 // Debug: Log all environment variables
 console.log('Environment Variables:', {
@@ -25,16 +30,36 @@ const firebaseConfig = {
 
 console.log('Firebase Config:', firebaseConfig);
 
+// Clean up any existing Firebase apps
+getApps().forEach(app => {
+  deleteApp(app).catch(console.error);
+});
+
 // Initialize Firebase for testing
 const app = initializeApp(firebaseConfig);
+
+// Initialize Firestore with specific settings for tests
+const firestoreSettings: FirestoreSettings = {
+  experimentalForceLongPolling: true,
+};
+
+const db = initializeFirestore(app, firestoreSettings);
+
 const auth = getAuth(app);
-const db = getFirestore(app);
 const storage = getStorage(app);
 
 // Connect to emulators
 connectAuthEmulator(auth, 'http://localhost:9099', { disableWarnings: true });
 connectFirestoreEmulator(db, 'localhost', 8080);
 connectStorageEmulator(storage, 'localhost', 9199);
+
+// Wrap Firestore operations to add test environment flag
+const wrapOperation = <T extends Record<string, unknown>>(data: T): T & { testEnv: boolean } => {
+  return { ...data, testEnv: true };
+};
+
+// Mock Firestore methods globally
+global.wrapFirestoreData = wrapOperation;
 
 // Global test setup
 global.beforeAll(() => {
@@ -46,6 +71,8 @@ global.beforeAll(() => {
   });
 });
 
-global.afterAll(() => {
-  // Add any global test cleanup here
+global.afterAll(async () => {
+  // Clean up Firebase apps
+  const apps = getApps();
+  await Promise.all(apps.map(app => deleteApp(app)));
 }); 

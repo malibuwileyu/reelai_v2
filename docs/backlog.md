@@ -52,6 +52,12 @@ This file tracks features, improvements, and tasks that are not currently priori
   - [ ] Improve memory management for video playback
   - [ ] Add request debouncing and throttling
   - [ ] Implement optimistic updates
+  - [ ] Implement optimistic streak updates with local state management
+    - Calculate streak locally based on last watched date
+    - Show immediate feedback for streak updates
+    - Handle background sync with server
+    - Manage edge cases (offline, conflicts)
+    - Add proper loading states
 
 ### Server-Side Optimization
 - API Performance

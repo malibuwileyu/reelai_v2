@@ -38,11 +38,11 @@ export const VideoUpload: React.FC<VideoUploadProps> = ({
         copyToCacheDirectory: true,
       });
 
-      if (result.type === 'success') {
+      if (!result.canceled && result.assets && result.assets.length > 0) {
         const file = {
-          uri: result.uri,
-          type: result.mimeType || 'video/mp4',
-          name: result.name,
+          uri: result.assets[0].uri,
+          type: result.assets[0].mimeType || 'video/mp4',
+          name: result.assets[0].name,
         };
 
         const options: VideoUploadOptions = {
