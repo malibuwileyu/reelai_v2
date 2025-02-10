@@ -13,7 +13,7 @@ export const VideoCard: React.FC<VideoCardProps> = ({ video, onPress }) => {
   
   // Calculate completion percentage
   const completionPercentage = progress ? Math.min(
-    (progress.watchedSeconds / (video.duration || 1)) * 100,
+    ((progress.watchedSeconds * 1000) / (video.metadata?.duration || 1)) * 100,
     100
   ) : 0;
 
@@ -37,7 +37,7 @@ export const VideoCard: React.FC<VideoCardProps> = ({ video, onPress }) => {
         {/* Duration */}
         <View style={styles.durationContainer}>
           <Text style={styles.durationText}>
-            {formatDuration(video.duration)}
+            {formatDuration(video.metadata?.duration || 0)}
           </Text>
         </View>
         {/* Completion badge */}
@@ -62,6 +62,8 @@ export const VideoCard: React.FC<VideoCardProps> = ({ video, onPress }) => {
 
 // Helper function to format video duration
 const formatDuration = (seconds: number) => {
+  if (!seconds) return '0:00';
+  
   const minutes = Math.floor(seconds / 60);
   const remainingSeconds = Math.floor(seconds % 60);
   return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;

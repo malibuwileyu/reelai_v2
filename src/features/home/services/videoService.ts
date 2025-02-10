@@ -135,12 +135,18 @@ export class VideoService {
           metadata: querySnapshot.metadata
         });
         
-        return querySnapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data(),
-          createdAt: doc.data().createdAt?.toDate() || new Date(),
-          updatedAt: doc.data().updatedAt?.toDate() || new Date(),
-        } as Video));
+        return querySnapshot.docs.map(doc => {
+          const data = doc.data();
+          return {
+            ...data,
+            id: doc.id,
+            metadata: {
+              ...data,
+              id: doc.id,
+              duration: data.duration || 0
+            }
+          } as Video;
+        });
       } else {
         const publicVideosQuery = query(
           videosRef,
@@ -170,12 +176,20 @@ export class VideoService {
           metadata: querySnapshot.metadata
         });
 
-        return querySnapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data(),
-          createdAt: doc.data().createdAt?.toDate() || new Date(),
-          updatedAt: doc.data().updatedAt?.toDate() || new Date(),
-        } as Video));
+        return querySnapshot.docs.map(doc => {
+          const data = doc.data();
+          return {
+            ...data,
+            id: doc.id,
+            metadata: {
+              ...data,
+              id: doc.id,
+              duration: data.duration || 0
+            },
+            createdAt: data.createdAt?.toDate() || new Date(),
+            updatedAt: data.updatedAt?.toDate() || new Date(),
+          } as Video;
+        });
       }
     } catch (error) {
       // Enhanced error logging
@@ -224,13 +238,25 @@ export class VideoService {
       // Get video data first to get the storage paths
       const video = await this.getVideo(videoId);
       
+      // Extract path from full Firebase Storage URL
+      const extractStoragePath = (url: string) => {
+        if (!url.startsWith('https://')) return url;
+        const storageUrl = new URL(url);
+        const pathParts = decodeURIComponent(storageUrl.pathname).split('/o/');
+        return pathParts.length > 1 ? pathParts[1] : url;
+      };
+
       // Delete video file from storage
-      const videoRef = ref(storage, video.url);
-      await deleteObject(videoRef);
+      if (video.videoUrl) {
+        const videoPath = extractStoragePath(video.videoUrl);
+        const videoRef = ref(storage, videoPath);
+        await deleteObject(videoRef);
+      }
       
       // Delete thumbnail if it exists
       if (video.thumbnailUrl) {
-        const thumbnailRef = ref(storage, video.thumbnailUrl);
+        const thumbnailPath = extractStoragePath(video.thumbnailUrl);
+        const thumbnailRef = ref(storage, thumbnailPath);
         await deleteObject(thumbnailRef);
       }
       
