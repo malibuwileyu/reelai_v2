@@ -56,32 +56,32 @@
   - [x] Chapter markers
 
 ### Video Player Migration Plan
-- [ ] Phase 1: Preparation
-  - [ ] Move EnhancedVideoPlayer to src/components/video/
-  - [ ] Create shared types in types.ts
-  - [ ] Extract shared video hooks to hooks/
-  - [ ] Update imports in learning path components
-- [ ] Phase 2: Component Refactor
-  - [ ] Add feature flags to EnhancedVideoPlayer
-    - [ ] useNativeControls (backward compatibility)
-    - [ ] enableSpeedControl
-    - [ ] enablePiP
-    - [ ] enableCustomControls
-  - [ ] Test each feature flag configuration
+- [x] Phase 1: Preparation
+  - [x] Move EnhancedVideoPlayer to src/components/video/
+  - [x] Create shared types in types.ts
+  - [x] Extract shared video hooks to hooks/
+  - [x] Update imports in learning path components
+- [x] Phase 2: Component Refactor
+  - [x] Add feature flags to EnhancedVideoPlayer
+    - [x] useNativeControls (backward compatibility)
+    - [x] enableSpeedControl
+    - [x] enablePiP
+    - [x] enableCustomControls
+  - [x] Test each feature flag configuration
 - [ ] Phase 3: Testing & Documentation
   - [ ] Comprehensive tests for EnhancedVideoPlayer
   - [ ] Migration documentation
   - [ ] Usage examples for different scenarios
-- [ ] Phase 4: Gradual Migration
+- [x] Phase 4: Gradual Migration
   - [x] Learning path screens
-  - [ ] Video detail screens
-  - [ ] Feed videos
-  - [ ] Embedded video instances
-- [ ] Phase 5: Cleanup
-  - [ ] Add deprecation notice to old VideoPlayer
-  - [ ] Remove old component
-  - [ ] Update documentation
-  - [ ] Final testing pass
+  - [x] Video detail screens
+  - [x] Feed videos
+  - [x] Embedded video instances
+- [x] Phase 5: Cleanup
+  - [x] Add deprecation notice to old VideoPlayer
+  - [x] Remove old component
+  - [x] Update documentation
+  - [x] Final testing pass
 
 ### 2. Vertical Video Scroller
 - [ ] Gesture System
