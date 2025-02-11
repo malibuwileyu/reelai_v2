@@ -1,5 +1,5 @@
 import React, { useCallback } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Share } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Share, SafeAreaView } from 'react-native';
 import { useNavigation } from '../../providers/NavigationProvider';
 
 interface ShareScreenProps {
@@ -36,31 +36,58 @@ export const ShareScreen: React.FC<ShareScreenProps> = ({ videoId }) => {
   );
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Share this video</Text>
-      <View style={styles.shareGrid}>
-        <ShareButton platform="Copy Link" icon="🔗" />
-        <ShareButton platform="WhatsApp" icon="💬" />
-        <ShareButton platform="Twitter" icon="🐦" />
-        <ShareButton platform="Facebook" icon="👥" />
-        <ShareButton platform="Email" icon="📧" />
-        <ShareButton platform="More" icon="•••" />
+    <SafeAreaView style={styles.safeArea}>
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => navigate('videoDetail', { videoId })}
+          >
+            <Text style={styles.backButtonText}>← Back</Text>
+          </TouchableOpacity>
+        </View>
+        <Text style={styles.title}>Share this video</Text>
+        <View style={styles.shareGrid}>
+          <ShareButton platform="Copy Link" icon="🔗" />
+          <ShareButton platform="WhatsApp" icon="💬" />
+          <ShareButton platform="Twitter" icon="🐦" />
+          <ShareButton platform="Facebook" icon="👥" />
+          <ShareButton platform="Email" icon="📧" />
+          <ShareButton platform="More" icon="•••" />
+        </View>
       </View>
-    </View>
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: '#121212',
+  },
   container: {
     flex: 1,
-    backgroundColor: '#fff',
     padding: 16,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  backButton: {
+    padding: 8,
+  },
+  backButtonText: {
+    color: '#007AFF',
+    fontSize: 16,
+    fontWeight: '600',
   },
   title: {
     fontSize: 24,
     fontWeight: '600',
     marginBottom: 24,
     textAlign: 'center',
+    color: '#fff',
   },
   shareGrid: {
     flexDirection: 'row',
@@ -72,7 +99,7 @@ const styles = StyleSheet.create({
   shareButton: {
     width: 100,
     height: 100,
-    backgroundColor: '#f8f8f8',
+    backgroundColor: '#1a1a1a',
     borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
@@ -85,5 +112,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '500',
     textAlign: 'center',
+    color: '#fff',
   },
 }); 

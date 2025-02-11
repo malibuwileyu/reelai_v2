@@ -1,3 +1,5 @@
+import { Timestamp } from 'firebase/firestore';
+
 export interface VideoMetadata {
   id: string;
   title: string;
@@ -59,4 +61,25 @@ export class VideoError extends Error {
     super(message);
     this.name = 'VideoError';
   }
+}
+
+export interface VideoBookmark {
+  id: string;
+  userId: string;
+  videoId: string;
+  timestamp: number;  // Position in video (milliseconds)
+  label: string;
+  notes?: string;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+}
+
+export interface VideoNote {
+  id: string;
+  userId: string;
+  videoId: string;
+  timestamp: number;  // Position in video (milliseconds)
+  content: string;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
 } 

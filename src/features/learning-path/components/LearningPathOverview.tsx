@@ -31,7 +31,7 @@ const DifficultyBadge: React.FC<DifficultyBadgeProps> = ({ difficulty }: Difficu
   );
 };
 
-export const LearningPathOverview: React.FC<LearningPathOverviewProps> = ({
+export const LearningPathOverview: React.FC<LearningPathOverviewProps> = ({ 
   pathId,
   onCreatorPress,
   onMilestonePress,

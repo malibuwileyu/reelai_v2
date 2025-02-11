@@ -31,9 +31,41 @@ export class VideoProcessor {
   }
 
   private async getVideoDuration(videoUrl: string, existingMetadata?: { duration?: number }): Promise<number> {
-    // Temporarily hardcoded to 0 to avoid errors
-    // TODO: Implement proper video duration detection
-    return 0;
+    try {
+      // If we already have duration in metadata, use that
+      if (existingMetadata?.duration && existingMetadata.duration > 0) {
+        return existingMetadata.duration;
+      }
+
+      // Create a new Video instance with required props
+      const video = new Video({ style: {} });
+      
+      // Load the video and wait for status
+      const status = await new Promise<AVPlaybackStatus>((resolve, reject) => {
+        video.loadAsync(
+          { uri: videoUrl },
+          { shouldPlay: false }
+        ).then(status => {
+          if (status.isLoaded) {
+            resolve(status);
+          } else {
+            reject(new Error('Failed to load video'));
+          }
+        }).catch(reject);
+      });
+
+      // Check if status is loaded and has duration
+      if (!status.isLoaded || !status.durationMillis) {
+        throw new Error('Could not get video duration');
+      }
+
+      // Convert milliseconds to seconds
+      return Math.round(status.durationMillis / 1000);
+    } catch (error) {
+      this.logger.error('[VideoProcessor] Error getting video duration:', error);
+      // Return 0 as fallback, but log the error
+      return 0;
+    }
   }
 
   private async generateThumbnail(videoUrl: string, videoId: string, userId: string): Promise<string | undefined> {
@@ -151,15 +183,16 @@ export class VideoProcessor {
       this.logger.error('Video processing error:', error);
       
       // Update video status to error
-      const errorUpdate: Partial<VideoMetadata> = {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      await this.updateVideoMetadata(videoId, {
         status: 'error' as const,
-        error: error instanceof Error ? error.message : 'Unknown error',
         updatedAt: new Date()
-      };
-      await this.updateVideoMetadata(videoId, errorUpdate)
-        .catch(err => this.logger.error('Failed to update error status:', err));
+      }).catch(err => this.logger.error('Failed to update error status:', err));
 
-      throw error;
+      return {
+        status: 'error',
+        error: errorMessage
+      };
     }
   }
 

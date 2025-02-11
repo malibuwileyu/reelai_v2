@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Image } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Image, TextInput } from 'react-native';
 import { Layout } from '../../components/shared/Layout';
 import { Video } from '../../models/Video';
 import { VideoService } from '../../features/home/services/videoService';
@@ -7,7 +7,8 @@ import { useNavigation } from '../../providers/NavigationProvider';
 import { showToast } from '../../utils/toast';
 import { useAuthContext } from '../../providers/AuthProvider';
 import { Timestamp } from 'firebase/firestore';
-import { VideoPlayer } from '../../components/video/VideoPlayer';
+import { EnhancedVideoPlayer } from '../../features/learning-path/components/EnhancedVideoPlayer';
+import { formatDuration } from '../../utils/formatDuration';
 
 interface Props {
   videoId: string;
@@ -21,24 +22,18 @@ const formatDate = (date: Timestamp | Date | string | number) => {
   return new Date(date).toLocaleDateString();
 };
 
-// Helper function to format video duration
-const formatDuration = (seconds: number) => {
-  if (!seconds) return '0:00';
-  
-  const minutes = Math.floor(seconds / 60);
-  const remainingSeconds = Math.floor(seconds % 60);
-  return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
-};
-
 export const VideoDetailScreen: React.FC<Props> = ({ videoId }) => {
   const { user } = useAuthContext();
   const { navigate } = useNavigation();
   const [video, setVideo] = useState<Video | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [noteContent, setNoteContent] = useState('');
+  const [notes, setNotes] = useState<any[]>([]);
 
   useEffect(() => {
     loadVideo();
+    loadNotes();
   }, [videoId]);
 
   const loadVideo = async () => {
@@ -57,6 +52,40 @@ export const VideoDetailScreen: React.FC<Props> = ({ videoId }) => {
       showToast('Failed to load video', 'error');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadNotes = async () => {
+    try {
+      const videoNotes = await VideoService.getNotes(videoId);
+      setNotes(videoNotes);
+    } catch (error) {
+      console.error('Error loading notes:', error);
+    }
+  };
+
+  const handleSaveNote = async () => {
+    if (!noteContent.trim()) return;
+    
+    try {
+      await VideoService.addNote(videoId, noteContent);
+      setNoteContent('');
+      loadNotes();
+      showToast('Note saved successfully', 'success');
+    } catch (error) {
+      console.error('Error saving note:', error);
+      showToast('Failed to save note', 'error');
+    }
+  };
+
+  const handleDeleteNote = async (noteId: string) => {
+    try {
+      await VideoService.deleteNote(videoId, noteId);
+      loadNotes();
+      showToast('Note deleted successfully', 'success');
+    } catch (error) {
+      console.error('Error deleting note:', error);
+      showToast('Failed to delete note', 'error');
     }
   };
 
@@ -107,9 +136,10 @@ export const VideoDetailScreen: React.FC<Props> = ({ videoId }) => {
             />
           )}
           {video.videoUrl && (
-            <VideoPlayer
+            <EnhancedVideoPlayer
               videoId={videoId}
               videoUrl={video.videoUrl}
+              duration={video.metadata?.duration}
               style={styles.video}
               shouldPlay={false}
             />
@@ -121,12 +151,51 @@ export const VideoDetailScreen: React.FC<Props> = ({ videoId }) => {
           
           <View style={styles.stats}>
             <Text style={styles.statsText}>
-              {video.views} views • {formatDuration(video.metadata.duration)} • {formatDate(video.createdAt)}
+              {video.views} views • {formatDuration(video.metadata?.duration || 0)} • {formatDate(video.createdAt)}
             </Text>
           </View>
 
           {video.description && (
             <Text style={styles.description}>{video.description}</Text>
+          )}
+
+          {/* Notes Section */}
+          <View style={styles.notesSection}>
+            <Text style={styles.sectionTitle}>Notes</Text>
+            <TextInput
+              style={styles.noteInput}
+              multiline
+              placeholder="Add your notes here..."
+              placeholderTextColor="#666"
+              value={noteContent}
+              onChangeText={setNoteContent}
+            />
+            <TouchableOpacity
+              style={[styles.actionButton, styles.saveButton]}
+              onPress={handleSaveNote}
+            >
+              <Text style={styles.actionButtonText}>Save Note</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Display existing notes */}
+          {notes.length > 0 && (
+            <View style={styles.existingNotes}>
+              {notes.map((note) => (
+                <View key={note.id} style={styles.noteItem}>
+                  <Text style={styles.noteContent}>{note.content}</Text>
+                  <Text style={styles.noteTimestamp}>
+                    {formatDate(note.createdAt)}
+                  </Text>
+                  <TouchableOpacity
+                    style={styles.deleteNoteButton}
+                    onPress={() => handleDeleteNote(note.id)}
+                  >
+                    <Text style={styles.deleteNoteText}>Delete</Text>
+                  </TouchableOpacity>
+                </View>
+              ))}
+            </View>
           )}
 
           {/* Actions */}
@@ -253,5 +322,56 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: 'bold',
+  },
+  notesSection: {
+    marginTop: 24,
+    marginBottom: 16,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#fff',
+    marginBottom: 12,
+  },
+  noteInput: {
+    backgroundColor: '#1a1a1a',
+    borderRadius: 8,
+    padding: 12,
+    color: '#fff',
+    fontSize: 16,
+    minHeight: 100,
+    textAlignVertical: 'top',
+    marginBottom: 12,
+  },
+  saveButton: {
+    backgroundColor: '#007AFF',
+  },
+  existingNotes: {
+    marginTop: 16,
+    gap: 12,
+  },
+  noteItem: {
+    backgroundColor: '#1a1a1a',
+    borderRadius: 8,
+    padding: 12,
+  },
+  noteContent: {
+    color: '#fff',
+    fontSize: 14,
+    marginBottom: 8,
+  },
+  noteTimestamp: {
+    color: '#666',
+    fontSize: 12,
+  },
+  deleteNoteButton: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    padding: 4,
+  },
+  deleteNoteText: {
+    color: '#ff3b30',
+    fontSize: 14,
   },
 }); 

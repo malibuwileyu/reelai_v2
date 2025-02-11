@@ -11,20 +11,31 @@ import { StreakDisplay } from '../../components/streak/StreakDisplay';
 import { ProgressService } from '../../services/progressService';
 import { StreakService } from '../../services/streakService';
 import { useStreak } from '../../hooks/useStreak';
+import { collection, query, where, getDocs } from 'firebase/firestore';
+import { db } from '../../config/firebase';
+import { VideoBookmark } from '../../types/video';
+
+type TabType = 'myVideos' | 'savedVideos';
 
 export const VideoLibraryScreen: React.FC = () => {
   const { user } = useAuthContext();
   const { navigate } = useNavigation();
   const { refresh: refreshStreak, updateOptimisticStreak } = useStreak();
+  const [activeTab, setActiveTab] = useState<TabType>('myVideos');
   const [videos, setVideos] = useState<Video[]>([]);
+  const [savedVideos, setSavedVideos] = useState<Video[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [simulatingWatch, setSimulatingWatch] = useState(false);
   const [updatingStreak, setUpdatingStreak] = useState(false);
 
   useEffect(() => {
-    loadVideos();
-  }, [user]);
+    if (activeTab === 'myVideos') {
+      loadVideos();
+    } else {
+      loadSavedVideos();
+    }
+  }, [user, activeTab]);
 
   const loadVideos = async () => {
     if (!user) {
@@ -51,6 +62,45 @@ export const VideoLibraryScreen: React.FC = () => {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
       setError(errorMessage);
       showToast('Failed to load videos: ' + errorMessage, 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadSavedVideos = async () => {
+    if (!user) {
+      setError('User not authenticated');
+      setLoading(false);
+      return;
+    }
+    
+    try {
+      setLoading(true);
+      setError(null);
+      
+      // Get all bookmarks for the user
+      const bookmarksQuery = query(
+        collection(db, 'videoBookmarks'),
+        where('userId', '==', user.uid)
+      );
+      const bookmarkDocs = await getDocs(bookmarksQuery);
+      const bookmarks = bookmarkDocs.docs.map(doc => ({ 
+        id: doc.id, 
+        ...doc.data() 
+      })) as VideoBookmark[];
+      
+      // Get video details for each bookmark
+      const videoIds = [...new Set(bookmarks.map(b => b.videoId))];
+      const videos = await Promise.all(
+        videoIds.map(id => VideoService.getVideo(id))
+      );
+      
+      setSavedVideos(videos.filter(v => v !== null));
+    } catch (error) {
+      console.error('[VideoLibrary] Error loading saved videos:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      setError(errorMessage);
+      showToast('Failed to load saved videos: ' + errorMessage, 'error');
     } finally {
       setLoading(false);
     }
@@ -138,12 +188,35 @@ export const VideoLibraryScreen: React.FC = () => {
     </View>
   );
 
+  const renderTabs = () => (
+    <View style={styles.tabContainer}>
+      <TouchableOpacity
+        style={[styles.tab, activeTab === 'myVideos' && styles.activeTab]}
+        onPress={() => setActiveTab('myVideos')}
+      >
+        <Text style={[styles.tabText, activeTab === 'myVideos' && styles.activeTabText]}>
+          My Videos
+        </Text>
+      </TouchableOpacity>
+      <TouchableOpacity
+        style={[styles.tab, activeTab === 'savedVideos' && styles.activeTab]}
+        onPress={() => setActiveTab('savedVideos')}
+      >
+        <Text style={[styles.tabText, activeTab === 'savedVideos' && styles.activeTabText]}>
+          Saved Videos
+        </Text>
+      </TouchableOpacity>
+    </View>
+  );
+
   const renderContent = () => {
     if (loading) {
       return (
         <View style={styles.centerContent}>
           <ActivityIndicator size="large" color="#007AFF" />
-          <Text style={styles.loadingText}>Loading videos...</Text>
+          <Text style={styles.loadingText}>
+            Loading {activeTab === 'myVideos' ? 'videos' : 'saved videos'}...
+          </Text>
         </View>
       );
     }
@@ -152,30 +225,42 @@ export const VideoLibraryScreen: React.FC = () => {
       return (
         <View style={styles.centerContent}>
           <Text style={styles.errorText}>{error}</Text>
-          <TouchableOpacity style={styles.retryButton} onPress={handleRetry}>
+          <TouchableOpacity 
+            style={styles.retryButton} 
+            onPress={() => activeTab === 'myVideos' ? loadVideos() : loadSavedVideos()}
+          >
             <Text style={styles.retryButtonText}>Retry</Text>
           </TouchableOpacity>
         </View>
       );
     }
 
-    if (videos.length === 0) {
+    const currentVideos = activeTab === 'myVideos' ? videos : savedVideos;
+
+    if (currentVideos.length === 0) {
       return (
         <View style={styles.centerContent}>
-          <Text style={styles.emptyText}>No videos uploaded yet</Text>
-          <TouchableOpacity
-            style={styles.uploadButton}
-            onPress={() => navigate('videoUpload')}
-          >
-            <Text style={styles.uploadButtonText}>Upload a Video</Text>
-          </TouchableOpacity>
+          <Text style={styles.emptyText}>
+            {activeTab === 'myVideos' 
+              ? 'No videos uploaded yet' 
+              : 'No saved videos yet'
+            }
+          </Text>
+          {activeTab === 'myVideos' && (
+            <TouchableOpacity
+              style={styles.uploadButton}
+              onPress={() => navigate('videoUpload')}
+            >
+              <Text style={styles.uploadButtonText}>Upload a Video</Text>
+            </TouchableOpacity>
+          )}
         </View>
       );
     }
 
     return (
       <FlatList
-        data={videos}
+        data={currentVideos}
         renderItem={renderVideo}
         keyExtractor={item => item.id}
         contentContainerStyle={styles.videoList}
@@ -187,22 +272,23 @@ export const VideoLibraryScreen: React.FC = () => {
   return (
     <Layout children={
       <View style={styles.container}>
-        <Text style={styles.title}>My Videos</Text>
+        {renderTabs()}
         <StreakDisplay style={styles.streakDisplay} />
         
-        {/* Test Button for Streak */}
-        <TouchableOpacity
-          style={[
-            styles.testButton,
-            updatingStreak && styles.testButtonDisabled
-          ]}
-          onPress={handleUpdateStreak}
-          disabled={updatingStreak}
-        >
-          <Text style={styles.testButtonText}>
-            {updatingStreak ? 'Updating...' : '🔥 Test Streak Update'}
-          </Text>
-        </TouchableOpacity>
+        {activeTab === 'myVideos' && (
+          <TouchableOpacity
+            style={[
+              styles.testButton,
+              updatingStreak && styles.testButtonDisabled
+            ]}
+            onPress={handleUpdateStreak}
+            disabled={updatingStreak}
+          >
+            <Text style={styles.testButtonText}>
+              {updatingStreak ? 'Updating...' : '🔥 Test Streak Update'}
+            </Text>
+          </TouchableOpacity>
+        )}
 
         {renderContent()}
       </View>
@@ -325,5 +411,29 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 14,
     fontWeight: 'bold',
+  },
+  tabContainer: {
+    flexDirection: 'row',
+    marginBottom: 20,
+    borderRadius: 8,
+    backgroundColor: '#1a1a1a',
+    padding: 4,
+  },
+  tab: {
+    flex: 1,
+    paddingVertical: 12,
+    alignItems: 'center',
+    borderRadius: 6,
+  },
+  activeTab: {
+    backgroundColor: '#2a2a2a',
+  },
+  tabText: {
+    color: '#888',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  activeTabText: {
+    color: '#fff',
   },
 }); 

@@ -31,8 +31,57 @@ This file tracks features, improvements, and tasks that are not currently priori
   - Firebase function implementations
   - Test suite stability
 
+### Video Processing Framework Issues
+- Current state: Video duration detection fails in processing context
+- Required: Fix expo-av Video component initialization and metadata extraction
+- Impact: Non-critical (metadata still available through other means)
+- Priority: Medium (Technical Debt)
+- Implementation Plan:
+  1. Framework Updates:
+     - Research alternatives to expo-av for processing context
+     - Implement proper Video component initialization
+     - Add fallback duration detection methods
+  2. Error Handling:
+     - Improve metadata extraction resilience
+     - Add proper error recovery
+     - Enhance logging for debugging
+  3. Testing:
+     - Add comprehensive tests for video processing
+     - Verify metadata extraction in all contexts
+     - Validate error handling
+- Target completion: After core features (Sprint 4)
+- Dependencies:
+  - expo-av framework
+  - Video processing pipeline
+  - Metadata handling system
+
 ## Feature Ideas
-- None yet
+- [ ] Progress Bar Dragging Implementation
+  - Current state: Progress bar is view-only, no seeking via drag
+  - Required: Add drag functionality while ensuring fair progression tracking
+  - Impact: Improves user experience while maintaining learning integrity
+  - Priority: Medium (UX Enhancement)
+  - Implementation Plan:
+    1. Technical Requirements:
+       - Add drag gesture handling to progress bar
+       - Implement smooth seeking during drag
+       - Add visual feedback during drag operation
+       - Ensure proper state updates during/after drag
+    2. Fair Progression:
+       - Track actual time watched vs. skipped sections
+       - Prevent credit for unwatched sections
+       - Consider implementing minimum watch time requirements
+       - Add analytics for seeking behavior
+    3. Testing:
+       - Verify smooth drag operation
+       - Validate progression tracking accuracy
+       - Test edge cases (rapid seeking, network issues)
+       - Verify progress persistence
+  - Target completion: After core features (Sprint 5)
+  - Dependencies:
+    - Video player implementation
+    - Progress tracking system
+    - Analytics framework
 
 ## Technical Debt
 - None yet
