@@ -10,7 +10,8 @@ import {
   updateDoc,
   deleteDoc,
   Timestamp,
-  FirestoreError
+  FirestoreError,
+  setDoc
 } from 'firebase/firestore';
 import { db } from '../../../config/firebase';
 import { LearningPath, LearningPathProgress } from '../types';
@@ -156,8 +157,8 @@ export class LearningPathService {
       const docSnap = await getDoc(docRef);
       
       if (!docSnap.exists()) {
-        console.log('⚠️ No progress found');
-        return null;
+        console.log('⚠️ No progress found, initializing...');
+        return await this.initializeProgress(userId, pathId);
       }
 
       const data = docSnap.data();
@@ -198,6 +199,34 @@ export class LearningPathService {
       console.log('✅ Progress updated successfully');
     } catch (error) {
       console.error('❌ Error updating progress:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Initialize progress for a learning path
+   */
+  static async initializeProgress(userId: string, pathId: string): Promise<LearningPathProgress> {
+    try {
+      console.log('🎯 Initializing progress for user:', userId, 'path:', pathId);
+      const now = Timestamp.now();
+      const progressData: LearningPathProgress = {
+        userId,
+        pathId,
+        currentMilestoneId: '',
+        completedMilestones: [],
+        completedVideos: [],
+        quizScores: {},
+        startedAt: now,
+        lastAccessedAt: now
+      };
+
+      const docRef = doc(db, COLLECTION.PROGRESS, `${userId}_${pathId}`);
+      await setDoc(docRef, progressData);
+      console.log('✅ Progress initialized successfully');
+      return progressData;
+    } catch (error) {
+      console.error('❌ Error initializing progress:', error);
       throw error;
     }
   }

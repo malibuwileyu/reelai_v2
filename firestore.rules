@@ -42,6 +42,32 @@ service cloud.firestore {
            .hasOnly(['lastWatchedDate', 'currentStreak', 'longestStreak', 'updatedAt']));
     }
 
+    // Achievement Progress rules
+    match /achievementProgress/{progressId} {
+      allow read: if isAuthenticated() 
+        && request.auth.uid == resource.data.userId;
+      allow write: if isAuthenticated()
+        && request.auth.uid == request.resource.data.userId;
+    }
+
+    // Learning Path rules
+    match /learningPaths/{pathId} {
+      allow read: if true;  // Allow public reading of learning paths
+      allow write: if isAuthenticated();
+    }
+
+    // Path Progress rules
+    match /pathProgress/{progressId} {
+      allow read, write: if isAuthenticated() 
+        && request.auth.uid == resource.data.userId;
+    }
+
+    // Milestone Progress rules
+    match /milestoneProgress/{progressId} {
+      allow read, write: if isAuthenticated()
+        && request.auth.uid == resource.data.userId;
+    }
+
     // Default allow for development
     match /{document=**} {
       allow read, write: if isAuthenticated();

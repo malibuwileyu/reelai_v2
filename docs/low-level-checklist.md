@@ -19,6 +19,13 @@
     - [ ] Security rules
     - [ ] Progress tracking
 
+### Navigation Improvements
+- [ ] Back Button Implementation
+  - [ ] Add consistent back button to all screens
+  - [ ] Handle navigation history properly
+  - [ ] Support gesture-based back navigation
+  - [ ] Maintain state during navigation
+
 ### Learning Analytics Layer
 - [ ] See `docs/workflow-checklists/learning-metrics.md`
   - [ ] Core Metrics

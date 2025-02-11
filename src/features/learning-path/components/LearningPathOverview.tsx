@@ -1,17 +1,24 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { View, Text, ScrollView, StyleSheet, Image, TouchableOpacity } from 'react-native';
 import { useLearningPath } from '../hooks/useLearningPath';
-import { LearningPathDifficulty } from '../types';
+import type { LearningPathDifficulty, VideoContent, QuizContent, Milestone } from '../types';
 import { UserService } from '../../../services/userService';
-import { User } from '../../../models/User';
+import type { User } from '../../../models/User';
+import { MilestoneList } from './MilestoneList';
 
 interface LearningPathOverviewProps {
   pathId: string;
   onCreatorPress?: (creatorId: string) => void;
+  onMilestonePress?: (milestone: Milestone) => void;
+  onContentPress?: (milestoneId: string, content: VideoContent | QuizContent) => void;
 }
 
-const DifficultyBadge: React.FC<{ difficulty: LearningPathDifficulty }> = ({ difficulty }) => {
-  const colors = {
+interface DifficultyBadgeProps {
+  difficulty: LearningPathDifficulty;
+}
+
+const DifficultyBadge: React.FC<DifficultyBadgeProps> = ({ difficulty }: DifficultyBadgeProps) => {
+  const colors: Record<LearningPathDifficulty, string> = {
     beginner: '#4CAF50',
     intermediate: '#FF9800',
     advanced: '#F44336'
@@ -24,15 +31,17 @@ const DifficultyBadge: React.FC<{ difficulty: LearningPathDifficulty }> = ({ dif
   );
 };
 
-export const LearningPathOverview: React.FC<LearningPathOverviewProps> = ({ 
+export const LearningPathOverview: React.FC<LearningPathOverviewProps> = ({
   pathId,
-  onCreatorPress 
-}) => {
+  onCreatorPress,
+  onMilestonePress,
+  onContentPress,
+}: LearningPathOverviewProps) => {
   const { path, progress, isLoading, error } = useLearningPath(pathId);
-  const [creator, setCreator] = useState<User | null>(null);
-  const [creatorLoading, setCreatorLoading] = useState(false);
+  const [creator, setCreator] = React.useState<User | null>(null);
+  const [creatorLoading, setCreatorLoading] = React.useState(false);
 
-  useEffect(() => {
+  React.useEffect(() => {
     const loadCreator = async () => {
       if (path?.creatorId) {
         setCreatorLoading(true);
@@ -73,6 +82,14 @@ export const LearningPathOverview: React.FC<LearningPathOverviewProps> = ({
       </View>
     );
   }
+
+  const handleMilestonePress = (milestone: Milestone) => {
+    onMilestonePress?.(milestone);
+  };
+
+  const handleContentPress = (milestoneId: string, content: VideoContent | QuizContent) => {
+    onContentPress?.(milestoneId, content);
+  };
 
   return (
     <ScrollView style={styles.container}>
@@ -154,6 +171,20 @@ export const LearningPathOverview: React.FC<LearningPathOverviewProps> = ({
           </Text>
         </View>
       )}
+
+      {/* Milestones Section */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Milestones</Text>
+        <MilestoneList
+          milestones={path.milestones}
+          completedMilestones={progress?.completedMilestones || []}
+          completedVideos={progress?.completedVideos || []}
+          quizScores={progress?.quizScores || {}}
+          currentMilestoneId={progress?.currentMilestoneId || ''}
+          onMilestonePress={handleMilestonePress}
+          onContentPress={handleContentPress}
+        />
+      </View>
 
       {/* Tags Section */}
       <View style={styles.tags}>
