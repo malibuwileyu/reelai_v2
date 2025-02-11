@@ -40,6 +40,10 @@ export const VideoLibraryScreen: React.FC = () => {
       
       const userVideos = await VideoService.getVideosByUser(user.uid);
       console.log('[VideoLibrary] Successfully loaded videos:', userVideos.length);
+      console.log('[VideoLibrary] Video thumbnails:', userVideos.map(video => ({
+        id: video.id,
+        thumbnailUrl: video.thumbnailUrl
+      })));
       
       setVideos(userVideos);
     } catch (error) {
@@ -57,36 +61,33 @@ export const VideoLibraryScreen: React.FC = () => {
   };
 
   const handleSimulateWatch = async (video: Video) => {
-    if (!user || simulatingWatch) return;
-    
+    if (!user) {
+      showToast('Please log in to track progress', 'error');
+      return;
+    }
+
     try {
-      setSimulatingWatch(true);
-      
-      // Update optimistic streak immediately
-      updateOptimisticStreak();
-      
       // Simulate watching 80% of the video
-      const watchedSeconds = Math.floor(video.duration * 0.8);
-      const lastPosition = watchedSeconds;
+      const watchedSeconds = Math.floor(video.metadata.duration * 0.8);
       
       // Update progress
       await ProgressService.updateProgress(
         user.uid,
         video.id,
         watchedSeconds,
-        lastPosition
+        watchedSeconds
       );
-      
-      // Update streak in the background
+
+      // Update streak
       await StreakService.updateStreak(user.uid);
+      
+      // Refresh streak info
       await refreshStreak();
       
-      showToast('Successfully simulated watching video! 🎬', 'success');
+      showToast('Watch progress updated', 'success');
     } catch (error) {
       console.error('Error simulating watch:', error);
-      showToast('Failed to simulate watch', 'error');
-    } finally {
-      setSimulatingWatch(false);
+      showToast('Failed to update watch progress', 'error');
     }
   };
 

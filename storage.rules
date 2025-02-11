@@ -17,10 +17,10 @@ service firebase.storage {
       allow write: if isOwner(userId);
     }
 
-    // Thumbnails - same rules as videos
-    match /thumbnails/{userId}/{videoId}/{fileName} {
+    // Thumbnails - allow authenticated users to write
+    match /thumbnails/{videoId}/{fileName} {
       allow read: if true;
-      allow write: if isOwner(userId);
+      allow write: if isAuthenticated();
     }
 
     // Default deny

@@ -1,35 +1,30 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { StyleSheet } from 'react-native';
 import { Layout } from '../../components/shared/Layout';
+import { LearningPathOverview } from '../../features/learning-path/components/LearningPathOverview';
+import { useNavigation } from '../../providers/NavigationProvider';
 
 interface Props {
   pathId: string;
 }
 
 export const PathDetailScreen: React.FC<Props> = ({ pathId }) => {
+  const { navigate } = useNavigation();
+
+  const handleCreatorPress = (creatorId: string) => {
+    navigate('profile', { userId: creatorId });
+  };
+
   return (
     <Layout children={
-      <View style={styles.container}>
-        <Text style={styles.title}>Learning Path Details</Text>
-        <Text style={styles.subtitle}>Path ID: {pathId}</Text>
-      </View>
+      <LearningPathOverview 
+        pathId={pathId}
+        onCreatorPress={handleCreatorPress}
+      />
     } />
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    padding: 20,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#fff',
-    marginBottom: 20,
-  },
-  subtitle: {
-    fontSize: 16,
-    color: '#999',
-  },
+  // Styles removed as they're no longer needed
 }); 

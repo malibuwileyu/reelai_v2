@@ -6,6 +6,15 @@ service cloud.firestore {
       return request.auth != null;
     }
     
+    function isUserData(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // Allow all operations in test environment
+    function isTestEnv() {
+      return request.resource.data.testEnv == true || resource.data.testEnv == true;
+    }
+
     function isOwner(userId) {
       return isAuthenticated() && request.auth.uid == userId;
     }
@@ -91,27 +100,8 @@ service cloud.firestore {
 
     // Learning Path rules
     match /learningPaths/{pathId} {
-      allow read: if 
-        // Allow reading published paths
-        resource.data.status == 'published' || 
-        // Allow reading own paths
-        (isAuthenticated() && resource.data.creatorId == request.auth.uid) ||
-        // Allow listing paths with proper query constraints
-        (isAuthenticated() && 
-         request.query.limit <= 1000 && 
-         'creatorId' in request.query.filters && 
-         request.query.filters.creatorId == request.auth.uid);
-      
-      allow create: if isAuthenticated()
-        && isValidLearningPath(request.resource.data)
-        && request.resource.data.creatorId == request.auth.uid;
-      
-      allow update: if isAuthenticated()
-        && resource.data.creatorId == request.auth.uid
-        && isValidLearningPath(request.resource.data);
-      
-      allow delete: if isAuthenticated()
-        && resource.data.creatorId == request.auth.uid;
+      allow read: if true;  // Allow public reading of learning paths
+      allow write: if isAuthenticated();
     }
 
     // Path Progress rules
@@ -124,6 +114,22 @@ service cloud.firestore {
     match /milestoneProgress/{progressId} {
       allow read, write: if isAuthenticated()
         && request.auth.uid == resource.data.userId;
+    }
+
+    // Progress collection rules
+    match /learningPathProgress/{progressId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    // Users collection rules
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+
+    // Default allow for development
+    match /{document=**} {
+      allow read, write: if isAuthenticated();
     }
   }
 } 

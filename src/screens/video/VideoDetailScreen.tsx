@@ -21,6 +21,15 @@ const formatDate = (date: Timestamp | Date | string | number) => {
   return new Date(date).toLocaleDateString();
 };
 
+// Helper function to format video duration
+const formatDuration = (seconds: number) => {
+  if (!seconds) return '0:00';
+  
+  const minutes = Math.floor(seconds / 60);
+  const remainingSeconds = Math.floor(seconds % 60);
+  return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+};
+
 export const VideoDetailScreen: React.FC<Props> = ({ videoId }) => {
   const { user } = useAuthContext();
   const { navigate } = useNavigation();
@@ -38,7 +47,9 @@ export const VideoDetailScreen: React.FC<Props> = ({ videoId }) => {
       setError(null);
       console.log('[VideoDetail] Loading video:', videoId);
       const videoData = await VideoService.getVideo(videoId);
+      console.log('[VideoDetail] Video metadata:', videoData.metadata);
       console.log('[VideoDetail] Video data:', videoData);
+      console.log('[VideoDetail] Video metadata duration:', videoData.metadata?.duration);
       setVideo(videoData);
     } catch (error) {
       console.error('[VideoDetail] Error loading video:', error);
@@ -110,7 +121,7 @@ export const VideoDetailScreen: React.FC<Props> = ({ videoId }) => {
           
           <View style={styles.stats}>
             <Text style={styles.statsText}>
-              {video.views} views • {formatDate(video.createdAt)}
+              {video.views} views • {formatDuration(video.metadata.duration)} • {formatDate(video.createdAt)}
             </Text>
           </View>
 

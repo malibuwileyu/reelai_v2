@@ -1,178 +1,140 @@
 # ReelAI Low-Level Implementation Checklist
 
-## 1. Firebase Reintegration 🔥
+## 1. Learning System Implementation 🎓
 
-### Authentication
-- [x] Verify Firebase project access
-  - [x] Check project ID and configuration
-  - [x] Verify API keys and credentials
-  - [x] Test existing auth endpoints
-  - [x] Update any expired credentials
-- [x] Implement Authentication Features
-  - [x] Email/Password authentication
-  - [x] Anonymous authentication
-  - [x] Sign out functionality
-  - [x] Auth state persistence
-- [x] Testing Infrastructure
-  - [x] Jest configuration
-  - [x] Test environment setup
-  - [x] Auth test utilities
-  - [x] E2E auth tests
+### Core Learning Path System
+- [ ] See `docs/workflow-checklists/learning-path-implementation.md`
+  - [ ] Data Models
+    - [ ] Learning Path structure
+    - [ ] Milestone system
+    - [ ] Content organization
+    - [ ] Progress tracking
+  - [ ] UI Components
+    - [ ] Path overview screen
+    - [ ] Vertical video scroller
+    - [ ] Enhanced video player
+    - [ ] Quiz system
+  - [ ] Firebase Integration
+    - [ ] Collection setup
+    - [ ] Security rules
+    - [ ] Progress tracking
 
-### Firestore Database
-- [x] Database Configuration
-  - [x] Initialize Firestore instance
-  - [x] Configure persistence
-  - [x] Set up error handling
-  - [x] Add logging/monitoring
-- [x] Testing Infrastructure
-  - [x] Firestore emulator setup
-  - [x] Test environment configuration
-  - [x] Basic CRUD tests
-  - [x] Query tests
-- [x] Data Models
-  - [x] User profiles and preferences
-  - [x] Video metadata and content
-  - [x] Progress tracking
-  - [x] Collection constants
-- [x] Security Rules
-  - [x] Basic read/write rules
-  - [x] User-specific rules
-  - [x] Role-based access
-  - [x] Data validation
-- [x] Indexes & Performance
-  - [x] Required indexes
-  - [x] Query optimization
-  - [x] Caching strategy
-  - [x] Batch operations
+### Learning Analytics Layer
+- [ ] See `docs/workflow-checklists/learning-metrics.md`
+  - [ ] Core Metrics
+    - [ ] Learning time tracking
+    - [ ] Progress measurement
+    - [ ] Engagement analysis
+    - [ ] Performance tracking
+  - [ ] Integration Points
+    - [ ] Video player analytics
+    - [ ] Quiz performance data
+    - [ ] Progress milestones
+    - [ ] Time tracking hooks
 
-### Storage
-- [x] Check storage configuration
-  - [x] Verify bucket access
-  - [x] Test upload capabilities
-  - [x] Check security rules
-  - [x] Verify media processing
+### Interactive Study Tools
+- [ ] See `docs/workflow-checklists/interactive-learning-tools.md`
+  - [ ] Study Notes System
+    - [ ] Rich text editor
+    - [ ] Media support
+    - [ ] Organization system
+  - [ ] Bookmarking System
+    - [ ] Video timestamp bookmarks
+    - [ ] Note references
+    - [ ] Quick access system
+  - [ ] Practice System
+    - [ ] Exercise types
+    - [ ] Progress tracking
+    - [ ] Performance metrics
 
-### Cloud Functions
-- [x] Review existing functions
-  - [x] Check deployment status
-  - [x] Test triggers
-  - [x] Verify error handling
-  - [x] Update dependencies
+## 2. Integration Points & Dependencies 🔄
 
-## 2. Feature Implementation 🎯
+### Data Layer Integration
+- [ ] Shared Data Models
+  - [ ] User progress schema
+  - [ ] Learning content schema
+  - [ ] Analytics data structure
+  - [ ] Tool preferences schema
 
-### Screen Structure
-- [x] Create base screen components
-  - [x] HomeScreen
-  - [x] LearnScreen
-  - [x] UploadScreen
-  - [x] ProfileScreen
-- [x] Implement sub-screens
-  - [x] Home/Feed Related
-    - [x] Video Detail/Player
-    - [x] Comments/Discussion
-    - [x] Share Interface
-  - [x] Learn Related
-    - [x] Subject Detail
-    - [x] Learning Path Detail
-    - [x] Quiz Interface
-    - [x] Study Notes
-    - [x] Achievement Detail
-  - [x] Upload Related
-    - [x] Upload Settings
-    - [x] Processing Details
-    - [x] AI Enhancement Options
-  - [x] Profile Related
-    - [x] Edit Profile
-    - [x] Video Library
-    - [x] Settings
+### UI/UX Integration
+- [ ] Navigation Flow
+  - [ ] Learning path to video player
+  - [ ] Video player to notes
+  - [ ] Notes to bookmarks
+  - [ ] Quiz to practice exercises
 
-### Video Management
-- [x] Upload System
-  - [x] Client-side upload
-  - [x] Progress tracking
-  - [x] Error handling
-  - [x] Thumbnail generation
-  - [x] Metadata management
+### Analytics Integration
+- [ ] Event Tracking
+  - [ ] Video interaction events
+  - [ ] Quiz completion events
+  - [ ] Note creation events
+  - [ ] Practice session events
 
-### User System
-- [x] Profile Management
-  - [x] Profile creation
-  - [x] Profile updates
-  - [x] Avatar handling
-  - [x] Settings management
-
-### Content System
-- [x] Video Processing
-  - [x] Thumbnail generation
-  - [x] Metadata extraction
-  - [x] Client-side optimization
-  - [x] Progress tracking
-- [x] Video Playback
-  - [x] Video player integration
-  - [x] Progress tracking
-  - [x] Error handling
-  - [x] Resume functionality
-
-### Progress System
-- [x] Video Progress
-  - [x] Watch time tracking
-  - [x] Progress persistence
-  - [x] Resume position
-  - [x] Completion marking
-- [x] Streak System
-  - [x] Daily streak tracking
-  - [x] Streak calculations
-  - [x] Optimistic updates
-  - [x] Persistence
-
-### Learning Path Implementation
-- [ ] See detailed implementation checklist in `docs/workflow-checklists/learning-path-implementation.md`
+### Firebase Collections
+- [ ] Collection Structure
+  ```javascript
+  learningPaths/{pathId}/
+    ├── milestones/
+    ├── progress/
+    └── analytics/
+  
+  userProgress/{userId}/
+    ├── pathProgress/
+    ├── quizResults/
+    └── practiceStats/
+  
+  studyTools/{userId}/
+    ├── notes/
+    ├── bookmarks/
+    └── exercises/
+  ```
 
 ## 3. Testing & Validation ✅
 
 ### Unit Tests
-- [ ] Authentication Tests
-  - [ ] Sign in flows
-  - [ ] Token management
-  - [ ] Error scenarios
-  - [ ] Edge cases
+- [ ] Learning Path Tests
+  - [ ] Progress calculation
+  - [ ] Milestone unlocking
+  - [ ] Content delivery
+- [ ] Analytics Tests
+  - [ ] Metric calculations
+  - [ ] Data aggregation
+  - [ ] Event tracking
+- [ ] Study Tools Tests
+  - [ ] Note operations
+  - [ ] Bookmark management
+  - [ ] Exercise validation
 
 ### Integration Tests
-- [ ] API Integration
-  - [ ] Endpoint testing
-  - [ ] Data flow validation
-  - [ ] Error handling
-  - [ ] Performance checks
-
-### E2E Tests
-- [ ] User Flows
-  - [ ] Authentication flow
-  - [ ] Video upload flow
-  - [ ] Profile management
-  - [ ] Content interaction
+- [ ] Cross-Feature Tests
+  - [ ] Path-Analytics integration
+  - [ ] Video-Notes integration
+  - [ ] Quiz-Practice integration
+- [ ] Data Flow Tests
+  - [ ] Progress updates
+  - [ ] Analytics collection
+  - [ ] Tool synchronization
 
 ## 4. Performance & Optimization 🚀
 
 ### Client-Side
 - [ ] State Management
-  - [ ] Cache implementation
-  - [ ] Offline support
-  - [ ] Data synchronization
-  - [ ] Memory management
+  - [ ] Progress caching
+  - [ ] Analytics buffering
+  - [ ] Tool state persistence
+- [ ] UI Performance
+  - [ ] Video player optimization
+  - [ ] Rich text editor performance
+  - [ ] List virtualization
 
 ### Server-Side
-- [ ] API Optimization
-  - [ ] Query optimization
-  - [ ] Batch operations
-  - [ ] Rate limiting
-  - [ ] Error handling
+- [ ] Query Optimization
+  - [ ] Progress aggregation
+  - [ ] Analytics processing
+  - [ ] Content delivery
 
 ## Notes
-- ✅ Firebase connectivity reestablished
-- ✅ Core features implemented
-- ✅ E2E testing done alongside development
-- 🎯 Focus on remaining critical features
-- 📝 Performance optimizations tracked in backlog.md
-- 🔄 All screens use header and footer by default
+- 📝 All features should follow file length guidelines (see codebase guidelines)
+- 🔄 Integration points documented in respective feature files
+- 📊 Analytics implementation should be non-blocking
+- 🎯 Focus on user experience continuity between features

@@ -5,6 +5,7 @@ import { storage, auth, db } from '../../../config/firebase';
 import { COLLECTIONS } from '../../../constants';
 import { VideoMetadata, VideoUploadOptions, VideoUploadProgress, VideoUploadResponse, VideoError } from '../../../types/video';
 import { VideoProcessor } from '../../../services/videoProcessor';
+import { StorageService } from '../../../services/storageService';
 
 // Helper function to generate a secure random ID
 const generateVideoId = () => {
@@ -94,18 +95,33 @@ export class FirebaseVideoService {
       await uploadTask;
       const downloadUrl = await getDownloadURL(storageRef);
 
-      // Update video document with URL
+      // Update video URL in metadata before processing
       await updateDoc(doc(this.db, COLLECTIONS.VIDEOS, videoId), {
         videoUrl: downloadUrl,
-        status: 'processing'
+        status: 'processing',
+        updatedAt: new Date()
       });
 
       // Start processing
-      await this.processor.processVideo(videoId, downloadUrl);
+      const processingResult = await this.processor.processVideo(videoId, downloadUrl, userId);
+      
+      if (processingResult.status === 'error') {
+        throw new VideoError(processingResult.error || 'Video processing failed', 'video/processing-failed');
+      }
+
+      // Update video document with processing results
+      await updateDoc(doc(this.db, COLLECTIONS.VIDEOS, videoId), {
+        status: 'ready',
+        thumbnailUrl: processingResult.thumbnailUrl,
+        duration: processingResult.duration,
+        updatedAt: new Date()
+      });
 
       return {
         videoId,
-        downloadUrl
+        downloadUrl,
+        thumbnailUrl: processingResult.thumbnailUrl,
+        duration: processingResult.duration
       };
     } catch (error) {
       this.logger.error('Video upload error:', error);
@@ -195,17 +211,31 @@ export class FirebaseVideoService {
     try {
       const video = await this.getVideo(videoId);
       
-      // Delete from Storage if URL exists
+      // Delete video file and thumbnail from Storage
+      const deletePromises: Promise<void>[] = [];
+      
       if (video.videoUrl) {
-        const storageRef = ref(this.storage, video.videoUrl);
-        await deleteObject(storageRef);
+        deletePromises.push(
+          StorageService.deleteFile(video.videoUrl)
+            .catch(error => {
+              this.logger.error('Error deleting video file:', error);
+              // Continue with deletion of other resources
+            })
+        );
       }
       
-      // Delete thumbnail if exists
       if (video.thumbnailUrl) {
-        const thumbnailRef = ref(this.storage, video.thumbnailUrl);
-        await deleteObject(thumbnailRef);
+        deletePromises.push(
+          StorageService.deleteFile(video.thumbnailUrl)
+            .catch(error => {
+              this.logger.error('Error deleting thumbnail:', error);
+              // Continue with deletion of other resources
+            })
+        );
       }
+      
+      // Wait for all deletions to complete
+      await Promise.all(deletePromises);
       
       // Delete from Firestore
       await deleteDoc(doc(this.db, COLLECTIONS.VIDEOS, videoId));
@@ -213,7 +243,7 @@ export class FirebaseVideoService {
       // Clean up upload task if exists
       this.activeUploads.delete(videoId);
     } catch (error) {
-      console.error('Error deleting video:', error);
+      this.logger.error('Error deleting video:', error);
       throw error;
     }
   }

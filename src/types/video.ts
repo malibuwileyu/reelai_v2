@@ -29,6 +29,8 @@ export interface VideoUploadOptions {
 export interface VideoUploadResponse {
   videoId: string;
   downloadUrl: string;
+  thumbnailUrl?: string;
+  duration?: number;
 }
 
 export interface VideoUploadProgress {

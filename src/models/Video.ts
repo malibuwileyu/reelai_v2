@@ -3,9 +3,24 @@ import { Timestamp } from 'firebase/firestore';
 export type VideoStatus = 'uploading' | 'processing' | 'ready' | 'error';
 
 export interface VideoMetadata {
-  duration: number;     // Video duration in seconds
-  format: string;      // Video format (e.g., 'mp4')
-  resolution: string;  // Video resolution (e.g., '1080p')
+  id: string;
+  title: string;
+  description?: string;
+  videoUrl: string;
+  thumbnailUrl?: string;
+  duration: number;
+  creatorId: string;
+  status: 'uploading' | 'processing' | 'ready' | 'error';
+  error?: string;
+  isPublic: boolean;
+  views: number;
+  likes: number;
+  category: string;
+  language: string;
+  mimeType: string;
+  size: number;
+  createdAt: Date | Timestamp;
+  updatedAt: Date | Timestamp;
 }
 
 export interface VideoChapter {
@@ -32,7 +47,6 @@ export interface Video {
   language: string;
   difficulty?: 'beginner' | 'intermediate' | 'advanced';
   metadata: VideoMetadata;
-  duration: number;
 }
 
 export interface VideoCreate extends Omit<Video, 'id' | 'createdAt' | 'updatedAt' | 'views' | 'likes' | 'shareCount'> {

@@ -1,4 +1,4 @@
-import { getStorage, ref, uploadBytesResumable, getDownloadURL, deleteObject } from 'firebase/storage';
+import { getStorage, ref, uploadBytesResumable, getDownloadURL, deleteObject, StorageReference } from 'firebase/storage';
 import { app, auth } from '../config/firebase';
 
 const storage = getStorage(app);
@@ -12,6 +12,39 @@ export interface StorageError extends Error {
 }
 
 export class StorageService {
+  static async deleteFile(path: string): Promise<void> {
+    try {
+      // If the path is a full URL, extract the path portion
+      if (path.startsWith('https://')) {
+        // Extract the path after the storage bucket
+        const storageUrl = new URL(path);
+        const pathParts = decodeURIComponent(storageUrl.pathname).split('/o/');
+        if (pathParts.length > 1) {
+          path = pathParts[1].split('?')[0]; // Remove query parameters
+        } else {
+          throw new Error('Invalid storage URL format');
+        }
+      }
+
+      // Create storage reference with the correct path
+      const storageRef = ref(storage, path);
+      try {
+        await deleteObject(storageRef);
+      } catch (deleteError) {
+        console.error('Error deleting file:', deleteError);
+        // If the file doesn't exist, don't throw an error
+        if ((deleteError as any)?.code === 'storage/object-not-found') {
+          console.warn('File not found, skipping deletion');
+          return;
+        }
+        throw deleteError;
+      }
+    } catch (error) {
+      console.error('File deletion error:', error);
+      throw error;
+    }
+  }
+
   static async uploadVideo(
     userId: string,
     videoId: string,
@@ -78,16 +111,6 @@ export class StorageService {
       return await getDownloadURL(storageRef);
     } catch (error) {
       console.error('Avatar upload error:', error);
-      throw error;
-    }
-  }
-
-  static async deleteFile(path: string): Promise<void> {
-    const storageRef = ref(storage, path);
-    try {
-      await deleteObject(storageRef);
-    } catch (error) {
-      console.error('File deletion error:', error);
       throw error;
     }
   }

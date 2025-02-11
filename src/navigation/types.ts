@@ -4,7 +4,7 @@ export type NavigationParams = {
   home: undefined;
   learn: undefined;
   upload: undefined;
-  profile: undefined;
+  profile: { userId: string };
   test: undefined;
   videoDetail: { videoId: string };
   login: undefined;
