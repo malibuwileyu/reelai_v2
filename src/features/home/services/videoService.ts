@@ -132,7 +132,16 @@ export class VideoService {
         console.log(`[VideoService] Query results:`, {
           count: querySnapshot.size,
           empty: querySnapshot.empty,
-          metadata: querySnapshot.metadata
+          metadata: querySnapshot.metadata,
+          videos: querySnapshot.docs.map(doc => {
+            const data = doc.data();
+            return {
+              id: doc.id,
+              metadata: data.metadata,
+              createdAt: data.createdAt,
+              title: data.title
+            };
+          })
         });
         
         return querySnapshot.docs.map(doc => {
@@ -141,10 +150,11 @@ export class VideoService {
             ...data,
             id: doc.id,
             metadata: {
-              ...data,
-              id: doc.id,
-              duration: data.duration || 0
-            }
+              ...(data.metadata || {}),
+              duration: data.metadata?.duration || 0
+            },
+            createdAt: data.createdAt?.toDate() || new Date(),
+            updatedAt: data.updatedAt?.toDate() || new Date()
           } as Video;
         });
       } else {
@@ -182,9 +192,8 @@ export class VideoService {
             ...data,
             id: doc.id,
             metadata: {
-              ...data,
-              id: doc.id,
-              duration: data.duration || 0
+              ...(data.metadata || {}),
+              duration: data.metadata?.duration || 0
             },
             createdAt: data.createdAt?.toDate() || new Date(),
             updatedAt: data.updatedAt?.toDate() || new Date(),
