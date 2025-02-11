@@ -1,8 +1,9 @@
 import { db, storage, auth } from '../../../config/firebase';
-import { doc, getDoc, collection, query, where, orderBy, limit, getDocs, updateDoc, increment, deleteDoc, QueryFieldFilterConstraint } from 'firebase/firestore';
+import { doc, getDoc, collection, query, where, orderBy, limit, getDocs, updateDoc, increment, deleteDoc, QueryFieldFilterConstraint, addDoc } from 'firebase/firestore';
 import { ref, deleteObject } from 'firebase/storage';
 import { Video } from '../../../models/Video';
 import { COLLECTIONS } from '../../../constants';
+import { Timestamp } from 'firebase/firestore';
 
 export class VideoService {
   static async getVideo(videoId: string): Promise<Video> {
@@ -274,6 +275,67 @@ export class VideoService {
       await deleteDoc(videoDocRef);
     } catch (error) {
       console.error('Error deleting video:', error);
+      throw error;
+    }
+  }
+
+  static async addNote(videoId: string, content: string) {
+    try {
+      const user = auth.currentUser;
+      if (!user) {
+        throw new Error('User not authenticated');
+      }
+
+      const note = {
+        userId: user.uid,
+        videoId,
+        content,
+        createdAt: Timestamp.now(),
+        updatedAt: Timestamp.now(),
+      };
+
+      await addDoc(collection(db, 'videoNotes'), note);
+    } catch (error) {
+      console.error('Error adding note:', error);
+      throw error;
+    }
+  }
+
+  static async deleteNote(videoId: string, noteId: string) {
+    try {
+      const user = auth.currentUser;
+      if (!user) {
+        throw new Error('User not authenticated');
+      }
+
+      const noteRef = doc(db, 'videoNotes', noteId);
+      await deleteDoc(noteRef);
+    } catch (error) {
+      console.error('Error deleting note:', error);
+      throw error;
+    }
+  }
+
+  static async getNotes(videoId: string) {
+    try {
+      const user = auth.currentUser;
+      if (!user) {
+        throw new Error('User not authenticated');
+      }
+
+      const notesQuery = query(
+        collection(db, 'videoNotes'),
+        where('userId', '==', user.uid),
+        where('videoId', '==', videoId)
+      );
+
+      const snapshot = await getDocs(notesQuery);
+      return snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+    } catch (error) {
+      console.error('Error getting notes:', error);
       throw error;
     }
   }

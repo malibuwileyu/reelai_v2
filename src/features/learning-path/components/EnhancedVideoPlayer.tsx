@@ -1,12 +1,12 @@
 import React, { useRef, useCallback, useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Animated, PanResponder, Modal, TextInput } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Animated, PanResponder, Modal, ActivityIndicator, Image, StatusBar, SafeAreaView } from 'react-native';
 import { Video as ExpoVideo, ResizeMode, AVPlaybackStatus } from 'expo-av';
 import { Ionicons } from '@expo/vector-icons';
 import { useProgress } from '../../../hooks/useProgress';
 import { useAuthContext } from '../../../providers/AuthProvider';
 import { formatDuration } from '../../../utils/formatDuration';
-import { VideoBookmark, VideoNote, VideoTranscript, VideoChapter } from '../types';
-import { getDocs, query, where, collection, addDoc } from 'firebase/firestore';
+import { VideoBookmark, VideoTranscript, VideoChapter } from '../types';
+import { getDocs, query, where, collection, addDoc, onSnapshot, doc, deleteDoc } from 'firebase/firestore';
 import { db } from '../../../config/firebase';
 import { Timestamp } from 'firebase/firestore';
 import { ScrollView } from 'react-native';
@@ -31,10 +31,9 @@ interface ControlsState {
   playbackSpeed: number;
   volume: number;
   isControlsVisible: boolean;
-  isBookmarkModalVisible: boolean;
-  isNoteModalVisible: boolean;
   isTranscriptVisible: boolean;
   isChaptersVisible: boolean;
+  isFullscreen: boolean;
 }
 
 export const EnhancedVideoPlayer: React.FC<EnhancedVideoPlayerProps> = ({
@@ -63,10 +62,9 @@ export const EnhancedVideoPlayer: React.FC<EnhancedVideoPlayerProps> = ({
     playbackSpeed: 1.0,
     volume: 1.0,
     isControlsVisible: true,
-    isBookmarkModalVisible: false,
-    isNoteModalVisible: false,
     isTranscriptVisible: false,
     isChaptersVisible: false,
+    isFullscreen: false,
   });
 
   // Hooks
@@ -74,8 +72,11 @@ export const EnhancedVideoPlayer: React.FC<EnhancedVideoPlayerProps> = ({
   const { user } = useAuthContext();
   const [isPipActive, setIsPipActive] = useState(false);
   const [bookmarks, setBookmarks] = useState<VideoBookmark[]>([]);
-  const [notes, setNotes] = useState<VideoNote[]>([]);
   const [activeChapter, setActiveChapter] = useState<VideoChapter | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<Error | null>(null);
+  const [showThumbnail, setShowThumbnail] = useState(true);
+  const [thumbnailUrl, setThumbnailUrl] = useState<string | null>(null);
 
   // Animation values
   const fadeAnim = useRef(new Animated.Value(1)).current;
@@ -107,31 +108,35 @@ export const EnhancedVideoPlayer: React.FC<EnhancedVideoPlayerProps> = ({
     };
   }, []);
 
-  // Load bookmarks and notes
+  // Load bookmarks
   useEffect(() => {
-    const loadEnhancements = async () => {
-      if (!user) return;
-      try {
-        // Load bookmarks and notes from Firestore
-        const bookmarksSnap = await getDocs(query(
-          collection(db, 'videoBookmarks'),
-          where('userId', '==', user.uid),
-          where('videoId', '==', videoId)
-        ));
-        setBookmarks(bookmarksSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }) as VideoBookmark));
+    if (!user) return;
 
-        const notesSnap = await getDocs(query(
-          collection(db, 'videoNotes'),
-          where('userId', '==', user.uid),
-          where('videoId', '==', videoId)
-        ));
-        setNotes(notesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }) as VideoNote));
-      } catch (error) {
-        console.error('Error loading enhancements:', error);
+    // Set up real-time listener for bookmarks
+    const bookmarksQuery = query(
+      collection(db, 'videoBookmarks'),
+      where('userId', '==', user.uid),
+      where('videoId', '==', videoId)
+    );
+
+    const unsubscribeBookmarks = onSnapshot(bookmarksQuery, 
+      (snapshot) => {
+        const bookmarkData = snapshot.docs.map(doc => ({ 
+          id: doc.id, 
+          ...doc.data() 
+        }) as VideoBookmark);
+        console.log('Bookmarks updated:', bookmarkData.length, 'bookmarks');
+        setBookmarks(bookmarkData);
+      },
+      (error) => {
+        console.error('Error in bookmark listener:', error);
       }
-    };
+    );
 
-    loadEnhancements();
+    return () => {
+      console.log('Cleaning up bookmark listener');
+      unsubscribeBookmarks();
+    };
   }, [user, videoId]);
 
   // Update active chapter based on current time
@@ -148,9 +153,31 @@ export const EnhancedVideoPlayer: React.FC<EnhancedVideoPlayerProps> = ({
     setActiveChapter(currentChapter || null);
   }, [controls.currentTime, chapters]);
 
+  // Load thumbnail
+  useEffect(() => {
+    const loadThumbnail = async () => {
+      try {
+        // Extract video ID from URL
+        const urlParts = videoUrl.split('/');
+        const videoIdIndex = urlParts.findIndex(part => part === 'videos') + 2;
+        if (videoIdIndex < 2) return;
+        
+        const videoPath = urlParts[videoIdIndex];
+        const thumbnailPath = `thumbnails/${videoPath}/thumbnail.jpg`;
+        const thumbnailUrl = videoUrl.replace('videos', 'thumbnails')
+          .replace('video.mp4', 'thumbnail.jpg');
+        setThumbnailUrl(thumbnailUrl);
+      } catch (error) {
+        console.error('Error loading thumbnail:', error);
+      }
+    };
+    loadThumbnail();
+  }, [videoUrl]);
+
   // Handlers
   const handlePlay = async () => {
     try {
+      setShowThumbnail(false);
       await videoRef.current?.playAsync();
       setControls(prev => ({ ...prev, isPlaying: true }));
       hideControlsWithDelay();
@@ -251,17 +278,22 @@ export const EnhancedVideoPlayer: React.FC<EnhancedVideoPlayerProps> = ({
           lastUpdateTimeRef.current = currentTime;
           const watchedSeconds = Math.floor(currentPosition / 1000);
 
-          if (progressUpdateTimeoutRef.current) {
-            clearTimeout(progressUpdateTimeoutRef.current);
-          }
+          if (currentPosition % 5000 < 1000 && currentTime - lastUpdateTimeRef.current >= 5000) {
+            lastUpdateTimeRef.current = currentTime;
+            const watchedSeconds = Math.floor(currentPosition / 1000);
 
-          progressUpdateTimeoutRef.current = setTimeout(async () => {
-            try {
-              await updateProgress(watchedSeconds, currentPosition);
-            } catch (error) {
-              console.error('Error updating progress:', error);
+            if (progressUpdateTimeoutRef.current) {
+              clearTimeout(progressUpdateTimeoutRef.current);
             }
-          }, 1000);
+
+            progressUpdateTimeoutRef.current = setTimeout(async () => {
+              try {
+                await updateProgress(watchedSeconds, currentPosition);
+              } catch (error) {
+                console.error('Error updating progress:', error);
+              }
+            }, 1000);
+          }
         }
 
         // Mark as completed if finished
@@ -278,41 +310,35 @@ export const EnhancedVideoPlayer: React.FC<EnhancedVideoPlayerProps> = ({
   );
 
   // Enhancement handlers
-  const handleAddBookmark = async () => {
+  const toggleBookmark = async () => {
     if (!user) return;
     try {
-      const bookmark: Omit<VideoBookmark, 'id'> = {
-        userId: user.uid,
-        videoId,
-        timestamp: controls.currentTime * 1000,
-        label: `Bookmark at ${formatDuration(controls.currentTime)}`,
-        createdAt: Timestamp.now(),
-        updatedAt: Timestamp.now(),
-      };
-      
-      const docRef = await addDoc(collection(db, 'videoBookmarks'), bookmark);
-      setBookmarks(prev => [...prev, { id: docRef.id, ...bookmark }]);
-    } catch (error) {
-      console.error('Error adding bookmark:', error);
-    }
-  };
+      // Check if there's already a bookmark at current time
+      const existingBookmark = bookmarks.find(bookmark => {
+        const bookmarkTime = bookmark.timestamp / 1000;
+        return Math.abs(bookmarkTime - controls.currentTime) < 1;
+      });
 
-  const handleAddNote = async (content: string) => {
-    if (!user) return;
-    try {
-      const note: Omit<VideoNote, 'id'> = {
-        userId: user.uid,
-        videoId,
-        timestamp: controls.currentTime * 1000,
-        content,
-        createdAt: Timestamp.now(),
-        updatedAt: Timestamp.now(),
-      };
-      
-      const docRef = await addDoc(collection(db, 'videoNotes'), note);
-      setNotes(prev => [...prev, { id: docRef.id, ...note }]);
+      if (existingBookmark) {
+        // Remove existing bookmark
+        const bookmarkRef = doc(db, 'videoBookmarks', existingBookmark.id);
+        await deleteDoc(bookmarkRef);
+        console.log('Bookmark removed:', existingBookmark.id);
+      } else {
+        // Add new bookmark
+        const bookmark: Omit<VideoBookmark, 'id'> = {
+          userId: user.uid,
+          videoId,
+          timestamp: controls.currentTime * 1000,
+          label: `Bookmark at ${formatDuration(controls.currentTime)}`,
+          createdAt: Timestamp.now(),
+          updatedAt: Timestamp.now(),
+        };
+        const docRef = await addDoc(collection(db, 'videoBookmarks'), bookmark);
+        console.log('Bookmark added:', docRef.id);
+      }
     } catch (error) {
-      console.error('Error adding note:', error);
+      console.error('Error toggling bookmark:', error);
     }
   };
 
@@ -325,191 +351,431 @@ export const EnhancedVideoPlayer: React.FC<EnhancedVideoPlayerProps> = ({
     }
   };
 
+  const handleVideoLoad = (status: AVPlaybackStatus) => {
+    if (!status.isLoaded) {
+      setLoadError(new Error('Failed to load video'));
+      setIsLoading(true);  // Keep loading state true if load failed
+      return;
+    }
+    
+    // Only set loading to false if video is successfully loaded
+    if (status.isLoaded) {
+      setIsLoading(false);
+      setLoadError(null);
+      setShowThumbnail(false);  // Hide thumbnail once video is loaded
+    }
+  };
+
+  const toggleFullscreen = async () => {
+    try {
+      // Store current playback state
+      const wasPlaying = controls.isPlaying;
+      const status = await videoRef.current?.getStatusAsync();
+      const currentPosition = status?.isLoaded ? status.positionMillis : 0;
+
+      // Always pause before transitioning
+      await videoRef.current?.pauseAsync();
+      setControls(prev => ({ ...prev, isPlaying: false }));
+
+      // Toggle fullscreen state
+      setControls(prev => ({ ...prev, isFullscreen: !prev.isFullscreen }));
+
+      // Small delay to ensure the new container is ready
+      setTimeout(async () => {
+        // Seek to the correct position in the new player
+        if (currentPosition > 0) {
+          await videoRef.current?.setPositionAsync(currentPosition);
+        }
+
+        // Only resume playing if we're exiting fullscreen and video was playing
+        if (!controls.isFullscreen && wasPlaying) {
+          await videoRef.current?.playAsync();
+          setControls(prev => ({ ...prev, isPlaying: true }));
+        }
+      }, 100);
+    } catch (error) {
+      console.error('Error toggling fullscreen:', error);
+      onError?.(error as Error);
+    }
+  };
+
+  const isCurrentTimeBookmarked = () => {
+    return bookmarks.some(bookmark => {
+      // Check if any bookmark is within 1 second of current time
+      const bookmarkTime = bookmark.timestamp / 1000;
+      return Math.abs(bookmarkTime - controls.currentTime) < 1;
+    });
+  };
+
   return (
-    <View style={[styles.container, style]}>
-      <TouchableOpacity
-        activeOpacity={1}
-        onPress={showControls}
-        {...panResponder.panHandlers}
-      >
-        <ExpoVideo
-          ref={videoRef}
-          source={{ uri: videoUrl }}
-          style={styles.video}
-          resizeMode={ResizeMode.CONTAIN}
-          shouldPlay={shouldPlay}
-          onPlaybackStatusUpdate={handlePlaybackStatusUpdate}
-          progressUpdateIntervalMillis={1000}
-        />
-
-        <Animated.View
+    <>
+      <View style={[styles.container, style]}>
+        <TouchableOpacity
+          activeOpacity={1}
+          onPress={showControls}
+          {...panResponder.panHandlers}
           style={[
-            styles.controls,
-            {
-              opacity: fadeAnim,
-              transform: [
-                {
-                  translateY: fadeAnim.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [50, 0],
-                  }),
-                },
-              ],
-            },
+            styles.videoWrapper,
+            controls.isFullscreen && styles.videoWrapperFullscreen
           ]}
-          pointerEvents={controls.isControlsVisible ? 'auto' : 'none'}
         >
-          {/* Top controls */}
-          <View style={styles.topControls}>
-            <TouchableOpacity onPress={togglePictureInPicture}>
-              <Ionicons
-                name={isPipActive ? 'expand' : 'contract'}
-                size={24}
-                color="#fff"
+          {showThumbnail && thumbnailUrl ? (
+            <View style={styles.thumbnailContainer}>
+              <Image
+                source={{ uri: thumbnailUrl }}
+                style={styles.thumbnail}
+                resizeMode="cover"
               />
-            </TouchableOpacity>
-          </View>
-
-          {/* Center controls */}
-          <View style={styles.centerControls}>
-            <TouchableOpacity
-              onPress={controls.isPlaying ? handlePause : handlePlay}
-              style={styles.playButton}
-            >
-              <Ionicons
-                name={controls.isPlaying ? 'pause' : 'play'}
-                size={40}
-                color="#fff"
-              />
-            </TouchableOpacity>
-          </View>
-
-          {/* Bottom controls */}
-          <View style={styles.bottomControls}>
-            {/* Progress bar */}
-            <View style={styles.progressBar}>
-              <View
-                style={[
-                  styles.progressFill,
-                  {
-                    width: `${(controls.currentTime / controls.duration) * 100}%`,
-                  },
-                ]}
-              />
+              <TouchableOpacity
+                onPress={handlePlay}
+                style={styles.playButtonOverlay}
+              >
+                <View style={styles.playButton}>
+                  <Ionicons name="play" size={40} color="#fff" />
+                </View>
+              </TouchableOpacity>
             </View>
-
-            {/* Time display */}
-            <View style={styles.timeDisplay}>
-              <Text style={styles.timeText}>
-                {formatDuration(controls.currentTime)}
-              </Text>
-              <Text style={styles.timeText}> / </Text>
-              <Text style={styles.timeText}>
-                {formatDuration(controls.duration)}
-              </Text>
-            </View>
-
-            {/* Playback speed */}
-            <TouchableOpacity
-              onPress={() => {
-                const speeds = [0.5, 1.0, 1.5, 2.0];
-                const currentIndex = speeds.indexOf(controls.playbackSpeed);
-                const nextSpeed = speeds[(currentIndex + 1) % speeds.length];
-                handleSpeedChange(nextSpeed);
+          ) : !controls.isFullscreen && (
+            <ExpoVideo
+              ref={videoRef}
+              source={{ uri: videoUrl }}
+              style={styles.video}
+              resizeMode={ResizeMode.CONTAIN}
+              shouldPlay={shouldPlay}
+              onPlaybackStatusUpdate={(status) => {
+                handleVideoLoad(status);
+                handlePlaybackStatusUpdate(status);
               }}
-              style={styles.speedButton}
+              progressUpdateIntervalMillis={1000}
+              useNativeControls={false}
+            />
+          )}
+
+          {/* Controls overlay */}
+          {!showThumbnail && !controls.isFullscreen && (
+            <Animated.View style={[styles.controlsOverlay, { opacity: fadeAnim }]}>
+              {/* Center controls */}
+              <View style={styles.miniplayerCenterControls}>
+                <TouchableOpacity
+                  onPress={controls.isPlaying ? handlePause : handlePlay}
+                  style={styles.playButton}
+                >
+                  <Ionicons
+                    name={controls.isPlaying ? 'pause' : 'play'}
+                    size={40}
+                    color="#fff"
+                  />
+                </TouchableOpacity>
+              </View>
+
+              {/* Bottom controls */}
+              <View style={styles.bottomControls}>
+                {/* Progress bar */}
+                <View style={styles.progressBar}>
+                  <View
+                    style={[
+                      styles.progressFill,
+                      {
+                        width: `${(controls.currentTime / controls.duration) * 100}%`,
+                      },
+                    ]}
+                  />
+                </View>
+
+                {/* Time display and controls */}
+                <View style={styles.controlsRow}>
+                  <View style={styles.timeDisplay}>
+                    <Text style={styles.timeText}>
+                      {formatDuration(controls.currentTime)}
+                    </Text>
+                    <Text style={styles.timeText}> / </Text>
+                    <Text style={styles.timeText}>
+                      {formatDuration(controls.duration)}
+                    </Text>
+                  </View>
+
+                  <View style={styles.rightControls}>
+                    {/* Playback speed */}
+                    <TouchableOpacity
+                      onPress={() => {
+                        const speeds = [0.5, 1.0, 1.5, 2.0];
+                        const currentIndex = speeds.indexOf(controls.playbackSpeed);
+                        const nextSpeed = speeds[(currentIndex + 1) % speeds.length];
+                        handleSpeedChange(nextSpeed);
+                      }}
+                      style={styles.speedButton}
+                    >
+                      <Text style={styles.speedText}>{controls.playbackSpeed}x</Text>
+                    </TouchableOpacity>
+
+                    {/* Enhancement controls */}
+                    <TouchableOpacity 
+                      onPress={toggleBookmark} 
+                      style={[
+                        styles.controlButton,
+                        isCurrentTimeBookmarked() && styles.activeControlButton
+                      ]}
+                    >
+                      <Ionicons 
+                        name="bookmark" 
+                        size={24} 
+                        color={isCurrentTimeBookmarked() ? "#007AFF" : "#fff"} 
+                      />
+                    </TouchableOpacity>
+                    <TouchableOpacity 
+                      onPress={() => setControls(prev => ({ ...prev, isTranscriptVisible: !prev.isTranscriptVisible }))}
+                      style={styles.controlButton}
+                    >
+                      <Ionicons name="document-text" size={24} color="#fff" />
+                    </TouchableOpacity>
+                    <TouchableOpacity 
+                      onPress={() => setControls(prev => ({ ...prev, isChaptersVisible: !prev.isChaptersVisible }))}
+                      style={styles.controlButton}
+                    >
+                      <Ionicons name="list" size={24} color="#fff" />
+                    </TouchableOpacity>
+
+                    {/* Fullscreen button */}
+                    <TouchableOpacity 
+                      onPress={toggleFullscreen}
+                      style={styles.controlButton}
+                    >
+                      <Ionicons
+                        name={controls.isFullscreen ? 'contract' : 'expand'}
+                        size={24}
+                        color="#fff"
+                      />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </View>
+            </Animated.View>
+          )}
+
+          {isLoading && (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color="#fff" />
+            </View>
+          )}
+          
+          {loadError && (
+            <View style={styles.errorContainer}>
+              <Text style={styles.errorText}>Failed to load video</Text>
+            </View>
+          )}
+        </TouchableOpacity>
+
+        {/* Advanced enhancement controls - only shown in fullscreen mode */}
+        {controls.isFullscreen && (
+          <View style={styles.fullscreenEnhancementControls}>
+            <TouchableOpacity 
+              style={[
+                styles.enhancementButton,
+                isCurrentTimeBookmarked() && styles.enhancementButtonActive
+              ]}
+              onPress={toggleBookmark}
             >
-              <Text style={styles.speedText}>{controls.playbackSpeed}x</Text>
+              <Ionicons 
+                name="bookmark" 
+                size={24} 
+                color={isCurrentTimeBookmarked() ? "#007AFF" : "#fff"} 
+              />
+              <Text style={[
+                styles.enhancementButtonText,
+                isCurrentTimeBookmarked() && styles.enhancementButtonTextActive
+              ]}>Bookmark</Text>
             </TouchableOpacity>
           </View>
-        </Animated.View>
-      </TouchableOpacity>
+        )}
 
-      {/* Learning enhancement controls */}
-      <View style={styles.enhancementControls}>
-        <TouchableOpacity onPress={handleAddBookmark}>
-          <Ionicons name="bookmark" size={24} color="#fff" />
-        </TouchableOpacity>
-        <TouchableOpacity onPress={() => setControls(prev => ({ ...prev, isNoteModalVisible: true }))}>
-          <Ionicons name="create" size={24} color="#fff" />
-        </TouchableOpacity>
-        <TouchableOpacity onPress={() => setControls(prev => ({ ...prev, isTranscriptVisible: !prev.isTranscriptVisible }))}>
-          <Ionicons name="document-text" size={24} color="#fff" />
-        </TouchableOpacity>
-        <TouchableOpacity onPress={() => setControls(prev => ({ ...prev, isChaptersVisible: !prev.isChaptersVisible }))}>
-          <Ionicons name="list" size={24} color="#fff" />
-        </TouchableOpacity>
+        {/* Transcript panel */}
+        {controls.isTranscriptVisible && transcript && (
+          <Animated.View style={styles.transcriptPanel}>
+            <ScrollView>
+              {transcript.segments.map((segment: { startTime: number; endTime: number; text: string; speakerId?: string }, index: number) => (
+                <TouchableOpacity
+                  key={index}
+                  style={styles.transcriptSegment}
+                  onPress={() => handleJumpToTimestamp(segment.startTime)}
+                >
+                  <Text style={styles.transcriptTime}>
+                    {formatDuration(segment.startTime / 1000)}
+                  </Text>
+                  <Text style={styles.transcriptText}>{segment.text}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </Animated.View>
+        )}
+
+        {/* Chapters panel */}
+        {controls.isChaptersVisible && chapters && (
+          <Animated.View style={styles.chaptersPanel}>
+            <ScrollView>
+              {chapters.map((chapter, index) => (
+                <TouchableOpacity
+                  key={chapter.id}
+                  style={[
+                    styles.chapterItem,
+                    activeChapter?.id === chapter.id && styles.activeChapter
+                  ]}
+                  onPress={() => handleJumpToTimestamp(chapter.timestamp)}
+                >
+                  <Text style={styles.chapterTitle}>{chapter.title}</Text>
+                  <Text style={styles.chapterDuration}>
+                    {formatDuration(chapter.duration / 1000)}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </Animated.View>
+        )}
       </View>
 
-      {/* Transcript panel */}
-      {controls.isTranscriptVisible && transcript && (
-        <Animated.View style={styles.transcriptPanel}>
-          <ScrollView>
-            {transcript.segments.map((segment: { startTime: number; endTime: number; text: string; speakerId?: string }, index: number) => (
+      {/* Fullscreen Modal */}
+      {controls.isFullscreen && (
+        <Modal
+          visible={controls.isFullscreen}
+          animationType="fade"
+          onRequestClose={toggleFullscreen}
+          supportedOrientations={['landscape', 'portrait']}
+          presentationStyle="overFullScreen"
+          transparent={true}
+        >
+          <View style={styles.fullscreenContainer}>
+            <SafeAreaView style={styles.fullscreenSafeArea}>
+              {/* Add TouchableOpacity wrapper for the entire fullscreen content */}
               <TouchableOpacity
-                key={index}
-                style={styles.transcriptSegment}
-                onPress={() => handleJumpToTimestamp(segment.startTime)}
+                activeOpacity={1}
+                onPress={() => {
+                  if (controls.isControlsVisible) {
+                    hideControls();
+                  } else {
+                    showControls();
+                    hideControlsWithDelay();
+                  }
+                }}
+                style={styles.fullscreenTouchable}
               >
-                <Text style={styles.transcriptTime}>
-                  {formatDuration(segment.startTime / 1000)}
-                </Text>
-                <Text style={styles.transcriptText}>{segment.text}</Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        </Animated.View>
-      )}
+                {/* Top Enhancement Controls */}
+                {controls.isControlsVisible && (
+                  <View style={styles.fullscreenTopBar}>
+                    <TouchableOpacity 
+                      onPress={toggleFullscreen}
+                      style={styles.fullscreenBackButton}
+                    >
+                      <Ionicons name="chevron-down" size={28} color="#FFFFFF" />
+                    </TouchableOpacity>
 
-      {/* Chapters panel */}
-      {controls.isChaptersVisible && chapters && (
-        <Animated.View style={styles.chaptersPanel}>
-          <ScrollView>
-            {chapters.map((chapter, index) => (
-              <TouchableOpacity
-                key={chapter.id}
-                style={[
-                  styles.chapterItem,
-                  activeChapter?.id === chapter.id && styles.activeChapter
-                ]}
-                onPress={() => handleJumpToTimestamp(chapter.timestamp)}
-              >
-                <Text style={styles.chapterTitle}>{chapter.title}</Text>
-                <Text style={styles.chapterDuration}>
-                  {formatDuration(chapter.duration / 1000)}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        </Animated.View>
-      )}
+                    <View style={styles.topEnhancementControls}>
+                      <TouchableOpacity 
+                        onPress={toggleBookmark} 
+                        style={[
+                          styles.controlButton,
+                          isCurrentTimeBookmarked() && styles.activeControlButton
+                        ]}
+                      >
+                        <Ionicons 
+                          name="bookmark" 
+                          size={24} 
+                          color={isCurrentTimeBookmarked() ? "#007AFF" : "#FFFFFF"} 
+                        />
+                      </TouchableOpacity>
+                      <TouchableOpacity 
+                        onPress={() => setControls(prev => ({ ...prev, isTranscriptVisible: !prev.isTranscriptVisible }))}
+                        style={styles.controlButton}
+                      >
+                        <Ionicons name="document-text" size={24} color="#FFFFFF" />
+                      </TouchableOpacity>
+                      <TouchableOpacity 
+                        onPress={() => setControls(prev => ({ ...prev, isChaptersVisible: !prev.isChaptersVisible }))}
+                        style={styles.controlButton}
+                      >
+                        <Ionicons name="list" size={24} color="#FFFFFF" />
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                )}
 
-      {/* Note modal */}
-      <Modal
-        visible={controls.isNoteModalVisible}
-        transparent
-        animationType="slide"
-      >
-        <View style={styles.modalContainer}>
-          <View style={styles.modalContent}>
-            <TextInput
-              style={styles.noteInput}
-              multiline
-              placeholder="Enter your note..."
-              onSubmitEditing={(e) => {
-                handleAddNote(e.nativeEvent.text);
-                setControls(prev => ({ ...prev, isNoteModalVisible: false }));
-              }}
-            />
-            <TouchableOpacity
-              onPress={() => setControls(prev => ({ ...prev, isNoteModalVisible: false }))}
-            >
-              <Text style={styles.modalClose}>Cancel</Text>
-            </TouchableOpacity>
+                {/* Video container */}
+                <View style={styles.fullscreenVideoContainer}>
+                  <ExpoVideo
+                    ref={videoRef}
+                    source={{ uri: videoUrl }}
+                    style={styles.fullscreenVideo}
+                    resizeMode={ResizeMode.CONTAIN}
+                    shouldPlay={shouldPlay}
+                    onPlaybackStatusUpdate={(status) => {
+                      handleVideoLoad(status);
+                      handlePlaybackStatusUpdate(status);
+                    }}
+                    progressUpdateIntervalMillis={1000}
+                    useNativeControls={false}
+                  />
+                </View>
+
+                {/* Bottom Controls */}
+                {controls.isControlsVisible && (
+                  <View style={styles.fullscreenBottomControls}>
+                    {/* Center play/pause button */}
+                    <View style={styles.fullscreenCenterControls}>
+                      <TouchableOpacity
+                        onPress={controls.isPlaying ? handlePause : handlePlay}
+                        style={styles.playButton}
+                      >
+                        <Ionicons
+                          name={controls.isPlaying ? 'pause' : 'play'}
+                          size={40}
+                          color="#fff"
+                        />
+                      </TouchableOpacity>
+                    </View>
+
+                    <View style={styles.progressBar}>
+                      <View
+                        style={[
+                          styles.progressFill,
+                          {
+                            width: `${(controls.currentTime / controls.duration) * 100}%`,
+                          },
+                        ]}
+                      />
+                    </View>
+
+                    <View style={styles.controlsRow}>
+                      <View style={styles.timeDisplay}>
+                        <Text style={styles.timeText}>
+                          {formatDuration(controls.currentTime)}
+                        </Text>
+                        <Text style={styles.timeText}> / </Text>
+                        <Text style={styles.timeText}>
+                          {formatDuration(controls.duration)}
+                        </Text>
+                      </View>
+
+                      <View style={styles.rightControls}>
+                        {/* Playback speed */}
+                        <TouchableOpacity
+                          onPress={() => {
+                            const speeds = [0.5, 1.0, 1.5, 2.0];
+                            const currentIndex = speeds.indexOf(controls.playbackSpeed);
+                            const nextSpeed = speeds[(currentIndex + 1) % speeds.length];
+                            handleSpeedChange(nextSpeed);
+                          }}
+                          style={styles.speedButton}
+                        >
+                          <Text style={styles.speedText}>{controls.playbackSpeed}x</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  </View>
+                )}
+              </TouchableOpacity>
+            </SafeAreaView>
           </View>
-        </View>
-      </Modal>
-    </View>
+        </Modal>
+      )}
+    </>
   );
 };
 
@@ -517,90 +783,109 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#000',
+    position: 'relative',
   },
-  video: {
+  videoWrapper: {
     flex: 1,
-  },
-  controls: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'space-between',
-    padding: 16,
-  },
-  topControls: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-  },
-  centerControls: {
-    flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
   },
+  video: {
+    width: '100%',
+    height: '100%',
+  },
+  controls: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+    justifyContent: 'space-between',
+  },
+  miniplayerCenterControls: {
+    position: 'absolute',
+    top: '50%',
+    left: '50%',
+    transform: [{ translateX: -30 }, { translateY: -30 }],
+    zIndex: 1002,
+  },
+  fullscreenCenterControls: {
+    position: 'absolute',
+    bottom: 350,
+    left: '53%',
+    transform: [{ translateX: -30 }],
+    zIndex: 1002,
+  },
   bottomControls: {
-    flexDirection: 'column',
+    width: '100%',
+    padding: 16,
+    paddingBottom: 24,
+  },
+  controlsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 8,
   },
   playButton: {
     width: 60,
     height: 60,
     borderRadius: 30,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
     justifyContent: 'center',
     alignItems: 'center',
+    zIndex: 1002,
+  },
+  timeDisplay: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  timeText: {
+    color: '#fff',
+    fontSize: 14,
   },
   progressBar: {
+    width: '100%',
     height: 4,
     backgroundColor: 'rgba(255, 255, 255, 0.3)',
     borderRadius: 2,
-    marginVertical: 8,
+    overflow: 'hidden',
   },
   progressFill: {
     height: '100%',
     backgroundColor: '#007AFF',
-    borderRadius: 2,
   },
-  timeDisplay: {
+  rightControls: {
     flexDirection: 'row',
-    justifyContent: 'flex-start',
     alignItems: 'center',
-    marginTop: 4,
-  },
-  timeText: {
-    color: '#fff',
-    fontSize: 12,
+    gap: 16,
   },
   speedButton: {
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 4,
     backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    alignSelf: 'flex-start',
-    marginTop: 8,
   },
   speedText: {
     color: '#fff',
-    fontSize: 12,
+    fontSize: 14,
   },
-  enhancementControls: {
-    position: 'absolute',
-    right: 16,
-    top: '50%',
-    transform: [{ translateY: -50 }],
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    borderRadius: 8,
+  controlButton: {
     padding: 8,
+    opacity: 0.8,
   },
   transcriptPanel: {
     position: 'absolute',
     right: 0,
     top: 0,
     bottom: 0,
-    width: 300,
+    width: 250,
     backgroundColor: 'rgba(0, 0, 0, 0.9)',
     padding: 16,
   },
   transcriptSegment: {
     flexDirection: 'row',
+    alignItems: 'flex-start',
     marginBottom: 8,
+    padding: 8,
+    borderRadius: 4,
   },
   transcriptTime: {
     color: '#fff',
@@ -637,28 +922,132 @@ const styles = StyleSheet.create({
     opacity: 0.7,
     fontSize: 12,
   },
-  modalContainer: {
+  loadingContainer: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+  },
+  errorContainer: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+  },
+  errorText: {
+    color: '#fff',
+    fontSize: 16,
+    textAlign: 'center',
+  },
+  thumbnailContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: '#000',
+    position: 'relative',
   },
-  modalContent: {
-    backgroundColor: '#fff',
+  thumbnail: {
+    width: '100%',
+    height: '100%',
+  },
+  playButtonOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  fullscreenContainer: {
+    flex: 1,
+    backgroundColor: '#000',
+  },
+  fullscreenSafeArea: {
+    flex: 1,
+    backgroundColor: 'transparent',
+  },
+  fullscreenTopBar: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     padding: 16,
-    borderRadius: 8,
-    width: '80%',
+    paddingTop: 0,
+    zIndex: 1001,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
   },
-  noteInput: {
-    height: 100,
-    borderColor: '#ccc',
-    borderWidth: 1,
-    borderRadius: 4,
+  topEnhancementControls: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+    marginRight: 8,
+  },
+  fullscreenBackButton: {
     padding: 8,
-    marginBottom: 16,
+    marginLeft: 8,
   },
-  modalClose: {
+  fullscreenVideoContainer: {
+    flex: 1,
+    backgroundColor: '#000',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  fullscreenBottomControls: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    padding: 16,
+    paddingBottom: 32,
+    zIndex: 1001,
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+  },
+  activeControlButton: {
+    opacity: 1,
+  },
+  controlsOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+    justifyContent: 'space-between',
+    zIndex: 1,
+  },
+  enhancementButton: {
+    alignItems: 'center',
+    opacity: 0.8,
+    paddingHorizontal: 4,
+  },
+  enhancementButtonActive: {
+    opacity: 1,
+  },
+  enhancementButtonText: {
+    color: '#fff',
+    fontSize: 12,
+    marginTop: 4,
+    fontWeight: '500',
+  },
+  enhancementButtonTextActive: {
     color: '#007AFF',
-    textAlign: 'center',
+  },
+  videoWrapperFullscreen: {
+    opacity: 0,
+  },
+  fullscreenTouchable: {
+    flex: 1,
+    width: '100%',
+    height: '100%',
+  },
+  fullscreenEnhancementControls: {
+    position: 'absolute',
+    right: 16,
+    top: '50%',
+    transform: [{ translateY: -80 }],
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    borderRadius: 8,
+    padding: 8,
+    gap: 16,
+  },
+  fullscreenVideo: {
+    width: '100%',
+    height: '100%',
   },
 }); 
