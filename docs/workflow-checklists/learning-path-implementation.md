@@ -83,23 +83,65 @@
   - [x] Update documentation
   - [x] Final testing pass
 
-### 2. Vertical Video Scroller
-- [ ] Gesture System
-  - [ ] Vertical swipe navigation
-  - [ ] Horizontal action swipes
-  - [ ] Double tap interactions
-- [ ] Performance
-  - [ ] Video preloading
-  - [ ] Thumbnail caching
-  - [ ] Viewport optimization
-  - [ ] Memory management
-- [ ] UI Elements
-  - [ ] Progress indicators
-  - [ ] Quick actions
-  - [ ] Information overlay
-  - [ ] Navigation hints
+## Phase 3: Transcript Generation
 
-## Phase 3: Quiz Implementation
+### 1. Audio Extraction System
+- [x] FFmpeg Integration
+  - [x] Set up FFmpeg.wasm for client-side processing
+  - [x] Implement audio extraction from video
+  - [x] Configure optimal audio format (mp3, 16kHz)
+  - [x] Add progress tracking for extraction
+  - [x] Implement cleanup of temporary files
+
+### 2. OpenAI Integration
+- [x] API Setup
+  - [x] Configure OpenAI client with API key
+  - [x] Implement rate limiting and retry logic
+  - [x] Add error handling for API failures
+  - [x] Set up response validation
+- [ ] Whisper API Integration
+  - [ ] Implement chunked audio processing
+  - [ ] Handle long-form content (>25MB)
+  - [ ] Configure language detection
+  - [ ] Optimize for accuracy vs. speed
+
+### 3. Processing Pipeline
+- [ ] Upload Integration
+  - [ ] Add transcript generation to video processing pipeline
+  - [ ] Implement background job system
+  - [ ] Add progress tracking to UI
+  - [ ] Handle failed transcription gracefully
+- [ ] Storage System
+  - [ ] Create transcripts collection in Firestore
+  - [ ] Implement caching system
+  - [ ] Add compression for large transcripts
+  - [ ] Set up transcript versioning
+
+### 4. Transcript Enhancement
+- [ ] Post-Processing
+  - [ ] Implement speaker diarization
+  - [ ] Add punctuation and formatting
+  - [ ] Generate chapter markers
+  - [ ] Create keyword index
+- [ ] Quality Assurance
+  - [ ] Add confidence scores
+  - [ ] Implement manual review system
+  - [ ] Add correction/feedback mechanism
+  - [ ] Set up quality metrics tracking
+
+### 5. Transcript Management
+- [ ] Access Control
+  - [ ] Set up security rules
+  - [ ] Implement access tracking
+  - [ ] Add usage analytics
+  - [ ] Configure rate limits
+- [ ] Maintenance
+  - [ ] Implement cleanup for failed jobs
+  - [ ] Add monitoring system
+  - [ ] Set up backup strategy
+  - [ ] Configure auto-scaling
+
+## Phase 4: Quiz Implementation
 
 ### 1. Quiz Engine
 - [ ] Question Types
@@ -131,7 +173,7 @@
   - [ ] Reference links
   - [ ] Practice suggestions
 
-## Phase 4: Progress System
+## Phase 5: Progress System
 
 ### 1. Progress Tracking
 - [ ] User Progress
@@ -157,7 +199,7 @@
   - [ ] Time distribution
   - [ ] Drop-off points
 
-## Phase 5: Testing & Validation
+## Phase 6: Testing & Validation
 
 ### 1. Unit Testing
 - [ ] Component Tests
