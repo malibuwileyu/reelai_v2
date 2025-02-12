@@ -83,6 +83,38 @@ This file tracks features, improvements, and tasks that are not currently priori
     - Progress tracking system
     - Analytics framework
 
+- [ ] Featured Content Vertical Scroller
+  - Current state: Using standard miniplayer cards for all video displays
+  - Required: Limited vertical scroller for featured/recommended content only
+  - Impact: Enhanced engagement for discovery while maintaining learning focus
+  - Priority: Low (UX Enhancement)
+  - Implementation Plan:
+    1. Technical Requirements:
+       - Implement vertical swipe gesture system
+       - Add video preloading for smooth transitions
+       - Create compact video info overlay
+       - Support quick actions (bookmark, add to path)
+    2. Performance Optimization:
+       - Smart preloading strategy
+       - Memory management for video instances
+       - Thumbnail caching system
+       - Viewport-based loading
+    3. UX Considerations:
+       - Clear distinction from main learning content
+       - Easy exit to structured learning view
+       - Limited autoplay functionality
+       - Quick preview capabilities
+    4. Integration Points:
+       - Featured content selection algorithm
+       - Learning path recommendations
+       - Progress tracking integration
+       - Analytics for engagement
+  - Target completion: After core features (Sprint 6)
+  - Dependencies:
+    - Enhanced video player stability
+    - Content recommendation system
+    - Performance optimization framework
+
 ## Technical Debt
 - None yet
 ## Nice-to-Have Improvements

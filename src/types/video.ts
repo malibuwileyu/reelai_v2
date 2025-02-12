@@ -53,12 +53,27 @@ export interface UploadProgress {
   error?: Error;
 }
 
+/**
+ * Error codes for video-related operations
+ */
+export type VideoErrorCode = 
+  | 'video/invalid-format'
+  | 'video/too-large'
+  | 'video/processing-failed'
+  | 'audio/ffmpeg-load-failed'
+  | 'audio/extraction-failed'
+  | 'audio/invalid-format'
+  | 'audio/too-large';
+
+/**
+ * Custom error class for video-related operations
+ */
 export class VideoError extends Error {
-  constructor(
-    message: string,
-    readonly code: string = 'video/unknown-error'
-  ) {
+  readonly code: VideoErrorCode;
+
+  constructor(message: string, code: VideoErrorCode) {
     super(message);
+    this.code = code;
     this.name = 'VideoError';
   }
 }
