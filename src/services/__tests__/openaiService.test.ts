@@ -1,4 +1,3 @@
-import 'openai/shims/node';
 import { OpenAIService, OpenAIError } from '../openaiService';
 import OpenAI from 'openai';
 

@@ -87,11 +87,13 @@ jest.mock('expo-video-thumbnails', () => ({
 
 // Mock fetch for Firebase Rules Testing
 global.fetch = jest.fn(() => 
-  Promise.resolve({
-    ok: true,
-    json: () => Promise.resolve({}),
-    text: () => Promise.resolve('')
-  })
+  Promise.resolve(new Response(JSON.stringify({}), {
+    status: 200,
+    statusText: 'OK',
+    headers: new Headers({
+      'Content-Type': 'application/json'
+    })
+  }))
 );
 
 // Mock environment variables

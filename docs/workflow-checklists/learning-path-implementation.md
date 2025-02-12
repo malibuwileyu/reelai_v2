@@ -99,20 +99,20 @@
   - [x] Implement rate limiting and retry logic
   - [x] Add error handling for API failures
   - [x] Set up response validation
-- [ ] Whisper API Integration
-  - [ ] Implement chunked audio processing
-  - [ ] Handle long-form content (>25MB)
-  - [ ] Configure language detection
+- [x] Whisper API Integration
+  - [x] Implement chunked audio processing
+  - [x] Handle long-form content (>25MB)
+  - [x] Configure language detection
   - [ ] Optimize for accuracy vs. speed
 
 ### 3. Processing Pipeline
-- [ ] Upload Integration
-  - [ ] Add transcript generation to video processing pipeline
+- [x] Upload Integration
+  - [x] Add transcript generation to video processing pipeline
   - [ ] Implement background job system
-  - [ ] Add progress tracking to UI
-  - [ ] Handle failed transcription gracefully
-- [ ] Storage System
-  - [ ] Create transcripts collection in Firestore
+  - [x] Add progress tracking to UI
+  - [x] Handle failed transcription gracefully
+- [x] Storage System
+  - [x] Create transcripts collection in Firestore
   - [ ] Implement caching system
   - [ ] Add compression for large transcripts
   - [ ] Set up transcript versioning

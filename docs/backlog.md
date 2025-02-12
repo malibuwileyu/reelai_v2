@@ -83,6 +83,33 @@ This file tracks features, improvements, and tasks that are not currently priori
     - Progress tracking system
     - Analytics framework
 
+- [ ] Video Upload UI Improvements
+  - Current state: No way to change video after selection, silent failures on missing title
+  - Required: Improve user feedback and control during upload process
+  - Impact: Better user experience and error handling
+  - Priority: High (UX Critical)
+  - Implementation Plan:
+    1. Video Selection:
+       - Add "Change Video" button after selection
+       - Show selected video name/thumbnail
+       - Add video preview option
+       - Support drag-and-drop
+    2. Error Handling:
+       - Add visible error message for missing title
+       - Show validation errors inline
+       - Add field highlighting for required fields
+       - Improve error message clarity
+    3. Testing:
+       - Verify video change functionality
+       - Test error message display
+       - Validate all error cases
+       - Check accessibility
+  - Target completion: Sprint 4
+  - Dependencies:
+    - Video upload component
+    - Form validation system
+    - UI component library
+
 - [ ] Featured Content Vertical Scroller
   - Current state: Using standard miniplayer cards for all video displays
   - Required: Limited vertical scroller for featured/recommended content only

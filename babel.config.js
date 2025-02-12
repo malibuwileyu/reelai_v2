@@ -1,11 +1,7 @@
 module.exports = function (api) {
   api.cache(true);
   return {
-    presets: [
-      'babel-preset-expo',
-      '@babel/preset-react',
-      '@babel/preset-typescript'
-    ],
+    presets: ['babel-preset-expo'],
     plugins: [
       ['module:react-native-dotenv', {
         moduleName: '@env',
@@ -14,8 +10,7 @@ module.exports = function (api) {
         whitelist: null,
         safe: false,
         allowUndefined: true,
-      }],
-      '@babel/plugin-syntax-jsx'
+      }]
     ],
   };
 }; 

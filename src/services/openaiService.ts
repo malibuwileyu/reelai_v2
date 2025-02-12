@@ -1,5 +1,5 @@
-import 'openai/shims/node';
 import OpenAI from 'openai';
+import * as FileSystem from 'expo-file-system';
 
 /**
  * Error codes for OpenAI-related operations
@@ -11,7 +11,8 @@ export type OpenAIErrorCode =
   | 'openai/network-error'
   | 'openai/timeout'
   | 'openai/invalid-response'
-  | 'openai/file-too-large';
+  | 'openai/file-too-large'
+  | 'openai/request-aborted';
 
 /**
  * Custom error class for OpenAI-related operations
@@ -34,6 +35,7 @@ export class OpenAIService {
   private logger: Console;
   private readonly MAX_FILE_SIZE = 25 * 1024 * 1024; // 25MB
   private readonly SUPPORTED_FORMATS = ['audio/mp3', 'audio/mpeg', 'audio/m4a'];
+  private readonly REQUEST_TIMEOUT = 30000; // 30 seconds
 
   constructor(apiKey?: string) {
     const key = apiKey || process.env.OPENAI_API_KEY;
@@ -46,57 +48,136 @@ export class OpenAIService {
 
   /**
    * Transcribe audio using Whisper API
-   * @param audioFile Audio file to transcribe (must be < 25MB)
+   * @param audioBlob Audio blob to transcribe (must be < 25MB)
    * @returns Transcription text
    */
-  async transcribeAudio(audioFile: File | Blob): Promise<string> {
+  async transcribeAudio(audioBlob: Blob): Promise<string> {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), this.REQUEST_TIMEOUT);
+
     try {
-      this.logger.info('Starting audio transcription...');
+      this.logger.info('[OpenAIService] Starting transcription process...');
+      this.logger.info('[OpenAIService] Audio blob details:', {
+        size: audioBlob.size,
+        type: audioBlob.type
+      });
 
       // Validate file size
-      if (audioFile.size > this.MAX_FILE_SIZE) {
+      if (audioBlob.size > this.MAX_FILE_SIZE) {
+        this.logger.error('[OpenAIService] File size exceeds limit:', {
+          size: audioBlob.size,
+          limit: this.MAX_FILE_SIZE
+        });
         throw new OpenAIError(
           'File size exceeds 25MB limit',
           'openai/file-too-large'
         );
       }
 
-      // Validate file format
-      if (audioFile instanceof File && !this.SUPPORTED_FORMATS.includes(audioFile.type)) {
+      // Validate file type
+      if (!this.SUPPORTED_FORMATS.includes(audioBlob.type)) {
+        this.logger.error('[OpenAIService] Unsupported audio format:', audioBlob.type);
         throw new OpenAIError(
-          'Unsupported audio format. Supported formats: MP3, M4A',
+          `Unsupported audio format: ${audioBlob.type}. Supported formats: ${this.SUPPORTED_FORMATS.join(', ')}`,
           'openai/api-error'
         );
       }
 
-      // Convert Blob to File if needed
-      const file = audioFile instanceof File ? audioFile : new File(
-        [audioFile],
-        'audio.mp3',
-        { type: 'audio/mp3' }
-      );
+      this.logger.info('[OpenAIService] Creating File object...');
+      // Create a File object from the Blob with .m4a extension
+      const file = new File([audioBlob], 'audio.m4a', { type: 'audio/m4a' });
+      this.logger.info('[OpenAIService] File object created:', {
+        name: file.name,
+        size: file.size,
+        type: file.type
+      });
 
-      const response = await this.client.audio.transcriptions.create({
-        file: file,
+      this.logger.info('[OpenAIService] Creating FormData...');
+      // Create FormData and append the file
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('model', 'whisper-1');
+      formData.append('language', 'en');
+      formData.append('response_format', 'text');
+      this.logger.info('[OpenAIService] FormData created with fields:', {
         model: 'whisper-1',
         language: 'en',
         response_format: 'text'
       });
 
-      if (!response) {
+      this.logger.info('[OpenAIService] Sending request to OpenAI...');
+      // Send the request using fetch directly
+      const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${this.client.apiKey}`,
+        },
+        body: formData,
+        signal: controller.signal
+      });
+
+      this.logger.info('[OpenAIService] Received response:', {
+        status: response.status,
+        statusText: response.statusText,
+        headers: Object.fromEntries(response.headers.entries())
+      });
+
+      if (!response.ok) {
+        let errorData: string;
+        try {
+          errorData = await response.text();
+          this.logger.error('[OpenAIService] API error response:', errorData);
+        } catch (e) {
+          errorData = 'Could not read error response';
+          this.logger.error('[OpenAIService] Could not read error response:', e);
+        }
+        
+        if (response.status === 429) {
+          throw new OpenAIError('Rate limit exceeded', 'openai/rate-limit');
+        } else if (response.status === 413) {
+          throw new OpenAIError('File too large', 'openai/file-too-large');
+        } else if (response.status === 415) {
+          throw new OpenAIError('Unsupported media type', 'openai/api-error');
+        }
+        
+        throw new OpenAIError(
+          `OpenAI API error: ${response.status} ${response.statusText} - ${errorData}`,
+          'openai/api-error'
+        );
+      }
+
+      this.logger.info('[OpenAIService] Reading response text...');
+      let text: string;
+      try {
+        text = await response.text();
+      } catch (e) {
+        this.logger.error('[OpenAIService] Error reading response:', e);
+        throw new OpenAIError(
+          'Failed to read API response',
+          'openai/invalid-response'
+        );
+      }
+      
+      if (!text) {
+        this.logger.error('[OpenAIService] Empty response from API');
         throw new OpenAIError(
           'Empty response from OpenAI',
           'openai/invalid-response'
         );
       }
 
-      this.logger.info('Transcription completed successfully');
-      return response;
+      this.logger.info('[OpenAIService] Transcription completed successfully');
+      return text;
     } catch (error: unknown) {
-      this.logger.error('Transcription error:', error);
+      this.logger.error('[OpenAIService] Transcription error:', error);
 
       if (error instanceof OpenAI.APIError) {
         const { status } = error;
+        this.logger.error('[OpenAIService] API error details:', {
+          status,
+          message: error.message,
+          error
+        });
         
         if (status === 429) {
           throw new OpenAIError('Rate limit exceeded', 'openai/rate-limit');
@@ -105,8 +186,12 @@ export class OpenAIService {
         } else if (status === 415) {
           throw new OpenAIError('Unsupported media type', 'openai/api-error');
         } else {
-          throw new OpenAIError('Internal server error', 'openai/api-error');
+          throw new OpenAIError(`OpenAI API error: ${error.message}`, 'openai/api-error');
         }
+      }
+
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        throw new OpenAIError('Request aborted', 'openai/request-aborted');
       }
 
       if (error instanceof Error && error.message.includes('timeout')) {
@@ -118,9 +203,11 @@ export class OpenAIService {
       }
 
       throw new OpenAIError(
-        'Failed to transcribe audio',
+        error instanceof Error ? error.message : 'Failed to transcribe audio',
         'openai/network-error'
       );
+    } finally {
+      clearTimeout(timeoutId);
     }
   }
 
@@ -137,6 +224,7 @@ export class OpenAIService {
       startTime: number;
       endTime: number;
     }>;
+    language: string;
   }> {
     try {
       if (!text.trim()) {

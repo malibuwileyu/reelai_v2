@@ -63,7 +63,10 @@ export type VideoErrorCode =
   | 'audio/ffmpeg-load-failed'
   | 'audio/extraction-failed'
   | 'audio/invalid-format'
-  | 'audio/too-large';
+  | 'audio/too-large'
+  | 'audio/processing-failed'
+  | 'audio/chunk-failed'
+  | 'audio/permission-denied';
 
 /**
  * Custom error class for video-related operations
@@ -97,4 +100,10 @@ export interface VideoNote {
   content: string;
   createdAt: Timestamp;
   updatedAt: Timestamp;
+}
+
+export interface Chapter {
+  title: string;
+  startTime: number;
+  endTime: number;
 } 

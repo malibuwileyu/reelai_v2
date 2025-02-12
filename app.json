@@ -28,7 +28,11 @@
     "web": {
       "favicon": "./assets/favicon.png"
     },
-    "plugins": [],
+    "plugins": [
+      [
+        "expo-av"
+      ]
+    ],
     "newArchEnabled": true
   }
 } 
