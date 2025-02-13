@@ -66,7 +66,9 @@ export type VideoErrorCode =
   | 'audio/too-large'
   | 'audio/processing-failed'
   | 'audio/chunk-failed'
-  | 'audio/permission-denied';
+  | 'audio/permission-denied'
+  | 'audio/recording-failed'
+  | 'audio/playback-failed';
 
 /**
  * Custom error class for video-related operations
@@ -100,10 +102,4 @@ export interface VideoNote {
   content: string;
   createdAt: Timestamp;
   updatedAt: Timestamp;
-}
-
-export interface Chapter {
-  title: string;
-  startTime: number;
-  endTime: number;
 } 
