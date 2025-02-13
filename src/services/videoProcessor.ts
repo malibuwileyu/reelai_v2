@@ -4,8 +4,6 @@ import { VideoMetadata, VideoError, VideoErrorCode } from '../types/video';
 import * as VideoThumbnails from 'expo-video-thumbnails';
 import { Video, AVPlaybackStatus } from 'expo-av';
 import { View } from 'react-native';
-import { WhisperService, WhisperServiceOptions } from './whisperService';
-import { AudioExtractor } from './audioExtractor';
 import type { VideoTranscript } from '../features/learning-path/types';
 
 const VIDEOS_COLLECTION = 'videos';
@@ -34,7 +32,6 @@ export class VideoProcessor {
   private storage: FirebaseStorage;
   private db: Firestore;
   private logger: Console;
-  private whisperService: WhisperService;
 
   constructor(
     storage: FirebaseStorage,
@@ -44,10 +41,6 @@ export class VideoProcessor {
     this.storage = storage;
     this.db = db;
     this.logger = logger;
-    
-    // Initialize WhisperService with AudioExtractor
-    const audioExtractor = new AudioExtractor(logger);
-    this.whisperService = new WhisperService(audioExtractor);
   }
 
   private async getVideoDuration(videoUrl: string, existingMetadata?: { duration?: number }): Promise<number> {
@@ -187,34 +180,8 @@ export class VideoProcessor {
         this.logger.error('Error generating thumbnail:', thumbnailError);
       }
 
-      // Generate transcript
-      onProgress?.({ stage: 'transcription', progress: 0, message: 'Starting transcription...' });
-      let transcript: VideoTranscript | undefined;
-      try {
-        // Download video as blob for transcription
-        const response = await fetch(videoUrl);
-        const videoBlob = await response.blob();
-        
-        // Generate transcript with progress updates
-        transcript = await this.whisperService.transcribeLongAudio(videoBlob, {
-          detectLanguage: true,
-          model: 'whisper-1',
-          temperature: 0
-        });
-
-        // Set videoId in transcript
-        transcript.videoId = videoId;
-
-        // Save transcript to Firestore
-        await this.saveTranscript(videoId, transcript);
-        onProgress?.({ stage: 'transcription', progress: 100, message: 'Transcription complete' });
-      } catch (transcriptError) {
-        this.logger.error('Error generating transcript:', transcriptError);
-        throw new VideoError(
-          'Failed to generate transcript',
-          'audio/processing-failed'
-        );
-      }
+      // Note: Transcription is now handled by the server
+      onProgress?.({ stage: 'transcription', progress: 100, message: 'Transcription will be handled by server' });
 
       // Prepare update with what we have
       const update: Partial<VideoMetadata> = {
@@ -230,7 +197,6 @@ export class VideoProcessor {
       return {
         thumbnailUrl,
         duration,
-        transcript,
         status: 'ready'
       };
     } catch (error) {
@@ -250,59 +216,13 @@ export class VideoProcessor {
     }
   }
 
-  /**
-   * Save transcript to Firestore
-   */
   private async saveTranscript(videoId: string, transcript: VideoTranscript): Promise<void> {
-    try {
-      await setDoc(doc(this.db, TRANSCRIPTS_COLLECTION, videoId), transcript);
-    } catch (error) {
-      this.logger.error('Error saving transcript:', error);
-      throw new VideoError(
-        'Failed to save transcript',
-        'audio/processing-failed'
-      );
-    }
+    const transcriptRef = doc(this.db, TRANSCRIPTS_COLLECTION, videoId);
+    await setDoc(transcriptRef, transcript);
   }
 
-  /**
-   * Update video metadata in Firestore
-   */
   private async updateVideoMetadata(videoId: string, update: Partial<VideoMetadata>): Promise<void> {
-    this.logger.info(`[VideoProcessor] Updating video metadata:`, update);
-    
-    try {
-      // Get existing data first
-      const videoDoc = await getDoc(doc(this.db, VIDEOS_COLLECTION, videoId));
-      const existingData = videoDoc.data();
-
-      // Remove any undefined values and merge with existing metadata
-      const cleanUpdate = Object.fromEntries(
-        Object.entries(update).filter(([_, value]) => value !== undefined)
-      );
-
-      // If we're updating status to ready, ensure we preserve metadata
-      if (cleanUpdate.status === 'ready' && existingData?.metadata) {
-        cleanUpdate.metadata = {
-          ...existingData.metadata,
-          duration: cleanUpdate.duration || existingData.metadata.duration
-        };
-      }
-
-      // Ensure thumbnailUrl is a full Firebase Storage URL
-      if (cleanUpdate.thumbnailUrl && typeof cleanUpdate.thumbnailUrl === 'string' && !cleanUpdate.thumbnailUrl.startsWith('https://')) {
-        const thumbnailRef = ref(this.storage, cleanUpdate.thumbnailUrl);
-        cleanUpdate.thumbnailUrl = await getDownloadURL(thumbnailRef);
-      }
-      
-      await updateDoc(doc(this.db, VIDEOS_COLLECTION, videoId), cleanUpdate);
-      this.logger.info(`[VideoProcessor] Metadata updated successfully:`, cleanUpdate);
-    } catch (error) {
-      this.logger.error(`[VideoProcessor] Error updating metadata:`, error);
-      throw new VideoError(
-        `Failed to update video metadata: ${error instanceof Error ? error.message : 'Unknown error'}`,
-        'video/processing-failed'
-      );
-    }
+    const videoRef = doc(this.db, VIDEOS_COLLECTION, videoId);
+    await updateDoc(videoRef, update);
   }
 }

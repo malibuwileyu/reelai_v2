@@ -1,4 +1,25 @@
-export type Screen = 'home' | 'learn' | 'upload' | 'profile' | 'test' | 'login' | 'register' | 'achievements' | 'videoUpload' | 'processingQueue' | 'aiEnhancement' | 'subjectDetail' | 'pathDetail' | 'editProfile' | 'videoLibrary' | 'settings' | 'comments' | 'share' | 'quiz' | 'studyNotes';
+export type Screen = 
+  | 'home'
+  | 'learn'
+  | 'upload'
+  | 'profile'
+  | 'test'
+  | 'login'
+  | 'register'
+  | 'achievements'
+  | 'videoUpload'
+  | 'processingQueue'
+  | 'aiEnhancement'
+  | 'subjectDetail'
+  | 'pathDetail'
+  | 'editProfile'
+  | 'videoLibrary'
+  | 'settings'
+  | 'comments'
+  | 'share'
+  | 'quiz'
+  | 'studyNotes'
+  | 'serverTest';
 
 export type NavigationParams = {
   home: undefined;
@@ -22,6 +43,7 @@ export type NavigationParams = {
   share: { videoId: string };
   quiz: { subjectId: string };
   studyNotes: { subjectId: string };
+  serverTest: undefined;
 };
 
 export type NavigationScreen = keyof NavigationParams; 

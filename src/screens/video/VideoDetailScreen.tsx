@@ -6,9 +6,25 @@ import { VideoService } from '../../features/home/services/videoService';
 import { useNavigation } from '../../providers/NavigationProvider';
 import { showToast } from '../../utils/toast';
 import { useAuthContext } from '../../providers/AuthProvider';
-import { Timestamp } from 'firebase/firestore';
+import { Timestamp, onSnapshot, doc } from 'firebase/firestore';
 import { EnhancedVideoPlayer } from '../../features/learning-path/components/EnhancedVideoPlayer';
 import { formatDuration } from '../../utils/formatDuration';
+import { db } from '../../config/firebase';
+
+interface VideoTranscript {
+  videoId: string;
+  text: string;
+  segments: Array<{
+    startTime: number;
+    endTime: number;
+    text: string;
+  }>;
+  createdAt: Date;
+}
+
+interface FirestoreTranscript extends Omit<VideoTranscript, 'createdAt'> {
+  createdAt: Timestamp;
+}
 
 interface Props {
   videoId: string;
@@ -30,10 +46,36 @@ export const VideoDetailScreen: React.FC<Props> = ({ videoId }) => {
   const [error, setError] = useState<string | null>(null);
   const [noteContent, setNoteContent] = useState('');
   const [notes, setNotes] = useState<any[]>([]);
+  const [transcript, setTranscript] = useState<VideoTranscript | null>(null);
+  const [transcriptLoading, setTranscriptLoading] = useState(true);
 
   useEffect(() => {
     loadVideo();
     loadNotes();
+
+    // Subscribe to transcript updates
+    const unsubscribe = onSnapshot(
+      doc(db, 'transcripts', videoId),
+      (doc) => {
+        setTranscriptLoading(false);
+        if (doc.exists()) {
+          const data = doc.data() as FirestoreTranscript;
+          // Convert Firestore Timestamp to Date
+          setTranscript({
+            ...data,
+            createdAt: data.createdAt.toDate()
+          });
+        } else {
+          setTranscript(null);
+        }
+      },
+      (error) => {
+        console.error('Error listening to transcript:', error);
+        setTranscriptLoading(false);
+      }
+    );
+
+    return () => unsubscribe();
   }, [videoId]);
 
   const loadVideo = async () => {
@@ -158,6 +200,32 @@ export const VideoDetailScreen: React.FC<Props> = ({ videoId }) => {
           {video.description && (
             <Text style={styles.description}>{video.description}</Text>
           )}
+
+          {/* Transcript Section */}
+          <View style={styles.transcriptSection}>
+            <Text style={styles.sectionTitle}>Transcript</Text>
+            {transcriptLoading ? (
+              <View style={styles.transcriptLoading}>
+                <ActivityIndicator size="small" color="#007AFF" />
+                <Text style={styles.transcriptLoadingText}>Loading transcript...</Text>
+              </View>
+            ) : transcript ? (
+              <View style={styles.transcriptContent}>
+                {transcript.segments.map((segment, index) => (
+                  <View key={index} style={styles.transcriptSegment}>
+                    <Text style={styles.transcriptTimestamp}>
+                      {formatDuration(segment.startTime)}
+                    </Text>
+                    <Text style={styles.transcriptText}>{segment.text}</Text>
+                  </View>
+                ))}
+              </View>
+            ) : (
+              <Text style={styles.noTranscriptText}>
+                Transcript is being generated...
+              </Text>
+            )}
+          </View>
 
           {/* Notes Section */}
           <View style={styles.notesSection}>
@@ -373,5 +441,51 @@ const styles = StyleSheet.create({
   deleteNoteText: {
     color: '#ff3b30',
     fontSize: 14,
+  },
+  transcriptSection: {
+    marginTop: 24,
+    marginBottom: 16,
+  },
+  transcriptContent: {
+    backgroundColor: '#1a1a1a',
+    borderRadius: 8,
+    padding: 16,
+  },
+  transcriptSegment: {
+    flexDirection: 'row',
+    marginBottom: 12,
+  },
+  transcriptTimestamp: {
+    color: '#007AFF',
+    fontSize: 14,
+    fontWeight: '500',
+    marginRight: 12,
+    minWidth: 60,
+  },
+  transcriptText: {
+    color: '#fff',
+    fontSize: 14,
+    flex: 1,
+    lineHeight: 20,
+  },
+  transcriptLoading: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#1a1a1a',
+    borderRadius: 8,
+    padding: 16,
+  },
+  transcriptLoadingText: {
+    color: '#666',
+    fontSize: 14,
+    marginLeft: 12,
+  },
+  noTranscriptText: {
+    color: '#666',
+    fontSize: 14,
+    fontStyle: 'italic',
+    backgroundColor: '#1a1a1a',
+    borderRadius: 8,
+    padding: 16,
   },
 }); 

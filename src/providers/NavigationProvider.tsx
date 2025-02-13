@@ -21,47 +21,18 @@ import { CommentsScreen } from '../screens/video/CommentsScreen';
 import { ShareScreen } from '../screens/video/ShareScreen';
 import { QuizScreen } from '../screens/learn/QuizScreen';
 import { StudyNotesScreen } from '../screens/learn/StudyNotesScreen';
+import { ServerTestScreen } from '../screens/debug/ServerTestScreen';
 import { NavigationScreen, NavigationParams } from '../navigation/types';
 import { useAuthContext } from './AuthProvider';
-
-// Base screens
-export type Screen = 'home' | 'learn' | 'upload' | 'profile' | 'test' | 'login' | 'register' | 'achievements' | 'videoUpload' | 'processingQueue' | 'aiEnhancement' | 'subjectDetail' | 'pathDetail' | 'editProfile' | 'videoLibrary' | 'settings' | 'comments' | 'share' | 'quiz' | 'studyNotes';
-
-// All screens including sub-screens
-export type NavigationScreen = keyof NavigationParams;
-
-export type NavigationParams = {
-  home: undefined;
-  learn: undefined;
-  upload: undefined;
-  profile: undefined;
-  test: undefined;
-  videoDetail: { videoId: string };
-  login: undefined;
-  register: undefined;
-  subjectDetail: { subjectId: string };
-  pathDetail: { pathId: string };
-  achievements: undefined;
-  videoUpload: undefined;
-  processingQueue: undefined;
-  aiEnhancement: undefined;
-  editProfile: undefined;
-  videoLibrary: undefined;
-  settings: undefined;
-  comments: { videoId: string };
-  share: { videoId: string };
-  quiz: { subjectId: string };
-  studyNotes: { subjectId: string };
-};
-
-type NavigationParamList = {
-  [K in NavigationScreen]: NavigationParams[K];
-};
 
 type NavigateFunction = <T extends NavigationScreen>(
   screen: T,
   params?: NavigationParams[T]
 ) => void;
+
+type NavigationParamList = {
+  [K in NavigationScreen]: NavigationParams[K];
+};
 
 interface NavigationContextType {
   currentScreen: NavigationScreen;
@@ -144,6 +115,8 @@ export const NavigationProvider: React.FC<{ children: ReactNode }> = ({ children
         return <VideoLibraryScreen />;
       case 'settings':
         return <SettingsScreen />;
+      case 'serverTest':
+        return <ServerTestScreen />;
       default:
         return user ? <HomeScreen /> : <LoginScreen />;
     }

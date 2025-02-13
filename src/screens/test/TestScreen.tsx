@@ -18,6 +18,14 @@ export const TestScreen: React.FC = () => {
         <Text style={styles.title}>Test Screens</Text>
         
         <View style={styles.section}>
+          <Text style={styles.sectionTitle}>🧪 Development</Text>
+          <TestButton 
+            title="Server Test Screen" 
+            onPress={() => navigate('serverTest')} 
+          />
+        </View>
+
+        <View style={styles.section}>
           <Text style={styles.sectionTitle}>🏠 Home Screens</Text>
           <TestButton 
             title="Video Detail Screen" 

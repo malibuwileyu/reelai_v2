@@ -1,182 +1,225 @@
-# FFMPEG Service Implementation Plan
+# FFMPEG Service Implementation Plan (React Server Approach)
 
 ## Overview
-This document outlines the implementation plan for the FFMPEG audio extraction service using Firebase Functions.
+This document outlines the implementation plan for video processing using a dedicated React server with FFMPEG, integrated with our existing Firebase infrastructure.
 
-## Directory Structure
+## Architecture
+
+### Components
 ```
-functions/
-├── src/
-│   ├── index.ts                 # Main entry point
-│   ├── config/
-│   │   └── firebase.ts          # Firebase admin initialization
-│   ├── services/
-│   │   └── ffmpeg.service.ts    # FFMPEG service implementation
-│   └── types/
-│       └── index.ts             # Type definitions
-├── package.json                 # Dependencies and scripts
-└── tsconfig.json               # TypeScript configuration
+Client (Expo App) → React Server → Firebase Storage
+                     ↓
+                    FFMPEG
+                     ↓
+                    WhisperAPI
+                     ↓
+                    Firebase DB
 ```
 
-## Implementation Steps
+## Implementation Phases
 
-### 1. FFMPEG Service (`src/services/ffmpeg.service.ts`)
-The service will handle audio extraction using FFMPEG:
+### Phase 1: Basic Server Setup
+1. Create Express server project:
+   ```bash
+   mkdir video-processing-server
+   cd video-processing-server
+   npm init -y
+   npm install express cors dotenv typescript ts-node @types/node @types/express
+   ```
 
+2. Server structure:
+   ```
+   video-processing-server/
+   ├── src/
+   │   ├── index.ts           # Server entry point
+   │   ├── routes/
+   │   │   └── health.ts      # Health check endpoint
+   │   ├── services/
+   │   │   └── ffmpeg.ts      # FFMPEG service
+   │   └── types/
+   │       └── index.ts       # Type definitions
+   ├── package.json
+   └── tsconfig.json
+   ```
+
+3. Initial endpoints:
+   ```typescript
+   // Health check endpoint
+   GET /health
+   Response: { status: 'ok', timestamp: number }
+   ```
+
+### Phase 2: Client Integration
+1. Add test screen to Expo app:
+   ```
+   src/screens/
+   └── debug/
+       └── ServerTestScreen.tsx
+   ```
+
+2. Test connection flow:
+   - Button to ping server
+   - Status display
+   - Error handling
+
+### Phase 3: FFMPEG Integration
+1. FFMPEG setup:
+   ```bash
+   npm install fluent-ffmpeg @ffmpeg-installer/ffmpeg
+   ```
+
+2. Basic operations:
+   - Video info extraction
+   - Audio extraction
+   - Format conversion
+
+3. Processing pipeline:
+   ```typescript
+   interface ProcessingJob {
+     id: string;
+     status: 'pending' | 'processing' | 'completed' | 'failed';
+     videoUrl: string;
+     outputUrl?: string;
+     error?: string;
+   }
+   ```
+
+### Phase 4: Firebase Integration
+1. Storage operations:
+   - Download video from Firebase Storage
+   - Process locally
+   - Upload processed audio
+   - Update metadata
+
+2. Database operations:
+   - Track processing status
+   - Store job results
+   - Handle errors
+
+### Phase 5: WhisperAPI Integration
+1. Audio processing:
+   - Split into chunks if needed
+   - Handle rate limits
+   - Merge transcripts
+
+2. Response handling:
+   - Format transcripts
+   - Store in Firebase
+   - Update video metadata
+
+## API Endpoints
+
+### Health Check
 ```typescript
-interface AudioExtractionOptions {
-  format: 'mp3' | 'm4a';
-  bitrate?: string;
-  sampleRate?: number;
-  channels?: number;
-}
-
-class FFmpegService {
-  async extractAudio(
-    videoPath: string, 
-    outputPath: string,
-    options: AudioExtractionOptions
-  ): Promise<string>
+GET /health
+Response: {
+  status: 'ok' | 'error';
+  timestamp: number;
+  version: string;
 }
 ```
 
-### 2. Firebase Function (`src/index.ts`)
-The HTTP function will:
-1. Accept video URL from request
-2. Download video to temp storage
-3. Process using FFMPEG
-4. Upload audio to Firebase Storage
-5. Return audio URL
-
+### Process Video
 ```typescript
-export const extractAudio = https.onCall(async (data, context) => {
-  // Implementation
-});
-```
-
-### 3. Security Rules
-Update Storage rules to allow audio file access:
-```
-match /audio/{audioId} {
-  allow read: if true;
-  allow write: if request.auth != null;
-}
-```
-
-## Configuration
-
-### Environment Variables
-Required in `.env`:
-```
-FIREBASE_STORAGE_BUCKET="your-bucket-name"
-TEMP_DIRECTORY="/tmp"
-```
-
-### Firebase Config
-Update `firebase.json`:
-```json
-{
-  "functions": {
-    "source": "functions",
-    "runtime": "nodejs18"
+POST /process
+Body: {
+  videoId: string;
+  videoUrl: string;
+  options?: {
+    format?: 'mp3' | 'm4a';
+    quality?: 'low' | 'medium' | 'high';
   }
 }
+Response: {
+  jobId: string;
+  status: 'pending';
+}
 ```
 
-## API Usage
-
-### Function Call
+### Check Status
 ```typescript
-const result = await functions.httpsCallable('extractAudio')({
-  videoUrl: 'https://storage.../video.mp4',
-  options: {
-    format: 'mp3',
-    bitrate: '192k'
-  }
-});
-```
-
-### Response Format
-```typescript
-interface ExtractAudioResponse {
-  success: boolean;
-  audioUrl?: string;
+GET /status/:jobId
+Response: {
+  jobId: string;
+  status: 'pending' | 'processing' | 'completed' | 'failed';
+  progress?: number;
   error?: string;
 }
 ```
-
-## Testing
-
-### Unit Tests
-Create tests for:
-- FFMPEG service
-- Input validation
-- Error handling
-
-### Integration Tests
-Test:
-- Full extraction flow
-- Storage operations
-- Error scenarios
-
-## Deployment
-
-### Steps
-1. Build TypeScript:
-   ```bash
-   cd functions
-   npm run build
-   ```
-
-2. Deploy function:
-   ```bash
-   firebase deploy --only functions:extractAudio
-   ```
-
-### Monitoring
-Monitor using Firebase Console:
-- Function execution
-- Error rates
-- Performance metrics
 
 ## Error Handling
 
 ### Error Types
 ```typescript
-type FFmpegError = 
-  | 'INVALID_INPUT'
-  | 'PROCESSING_FAILED'
-  | 'STORAGE_ERROR'
-  | 'NETWORK_ERROR';
+type ProcessingError =
+  | 'DOWNLOAD_FAILED'
+  | 'FFMPEG_ERROR'
+  | 'UPLOAD_FAILED'
+  | 'WHISPER_ERROR'
+  | 'INVALID_INPUT';
 ```
 
 ### Error Responses
-All errors will include:
+All errors include:
 - Error code
-- Human-readable message
+- Message
 - Timestamp
-- Request ID
+- Job ID (if applicable)
 
-## Performance Considerations
+## Monitoring
 
-### Optimizations
-1. Use appropriate memory allocation
-2. Clean up temporary files
-3. Stream processing where possible
-4. Implement timeout handling
+### Metrics to Track
+1. Processing times
+2. Error rates
+3. Queue length
+4. Resource usage
 
-### Limitations
-- Max video size: 100MB
-- Max processing time: 5 minutes
-- Supported formats: MP4, MOV
-- Output formats: MP3, M4A
+### Logging
+```typescript
+interface ProcessingLog {
+  timestamp: number;
+  jobId: string;
+  stage: 'download' | 'ffmpeg' | 'whisper' | 'upload';
+  status: 'start' | 'complete' | 'error';
+  duration?: number;
+  error?: string;
+}
+```
+
+## Development Steps
+
+### 1. Initial Setup (Current Focus)
+- [x] Create server project
+- [ ] Add health endpoint
+- [ ] Create test UI screen
+- [ ] Test basic connectivity
+
+### 2. FFMPEG Integration
+- [ ] Install FFMPEG
+- [ ] Create processing service
+- [ ] Test basic operations
+- [ ] Add job queue
+
+### 3. Firebase Integration
+- [ ] Add Firebase admin SDK
+- [ ] Implement storage operations
+- [ ] Add database updates
+- [ ] Test end-to-end flow
+
+### 4. WhisperAPI Integration
+- [ ] Add OpenAI client
+- [ ] Implement chunking
+- [ ] Handle rate limits
+- [ ] Store transcripts
+
+### 5. Production Readiness
+- [ ] Add monitoring
+- [ ] Implement logging
+- [ ] Add error recovery
+- [ ] Deploy infrastructure
 
 ## Next Steps
-
-1. Create TypeScript files in `functions/src`
-2. Implement FFMPEG service
-3. Add Firebase function
-4. Write tests
-5. Deploy and test
-6. Monitor performance
-7. Iterate based on feedback 
+1. Create basic server
+2. Add health endpoint
+3. Create test UI
+4. Test connectivity 

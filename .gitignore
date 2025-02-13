@@ -58,3 +58,6 @@ debug.log
 *.tmp
 .tmp/
 temp/ 
+
+# Service account key
+service-account-key.json
