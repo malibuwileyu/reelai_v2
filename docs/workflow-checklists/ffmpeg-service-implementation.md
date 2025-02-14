@@ -1,149 +1,120 @@
 # FFMPEG Service Implementation Plan
 
 ## Overview
-This document outlines the implementation plan for the FFMPEG audio extraction service using Firebase Functions.
+This document outlines the implementation plan for the FFMPEG audio extraction service using a dedicated Express server.
 
 ## Directory Structure
 ```
-functions/
+video-processing-server/
 ├── src/
-│   ├── index.ts                 # Main entry point
+│   ├── index.ts                 # [x] Main entry point
 │   ├── config/
-│   │   └── firebase.ts          # Firebase admin initialization
+│   │   └── firebase.ts          # [x] Firebase admin initialization
 │   ├── services/
-│   │   └── ffmpeg.service.ts    # FFMPEG service implementation
-│   └── types/
-│       └── index.ts             # Type definitions
-├── package.json                 # Dependencies and scripts
-└── tsconfig.json               # TypeScript configuration
+│   │   └── videoProcessor.ts    # [x] Video processing implementation
+│   └── routes/
+│       ├── health.ts             # [x] Health check endpoint
+│       └── process.ts            # [x] Processing endpoint
+├── package.json                 # [x] Dependencies and scripts
+└── tsconfig.json               # [x] TypeScript configuration
 ```
 
 ## Implementation Steps
 
-### 1. FFMPEG Service (`src/services/ffmpeg.service.ts`)
-The service will handle audio extraction using FFMPEG:
+### 1. Video Processing Service (`src/services/videoProcessor.ts`)
+The service handles video processing using FFMPEG:
+- [x] Video metadata extraction
+- [x] Audio extraction
+- [x] Transcript generation
+- [x] Firebase integration
 
-```typescript
-interface AudioExtractionOptions {
-  format: 'mp3' | 'm4a';
-  bitrate?: string;
-  sampleRate?: number;
-  channels?: number;
-}
-
-class FFmpegService {
-  async extractAudio(
-    videoPath: string, 
-    outputPath: string,
-    options: AudioExtractionOptions
-  ): Promise<string>
-}
-```
-
-### 2. Firebase Function (`src/index.ts`)
-The HTTP function will:
-1. Accept video URL from request
-2. Download video to temp storage
-3. Process using FFMPEG
-4. Upload audio to Firebase Storage
-5. Return audio URL
-
-```typescript
-export const extractAudio = https.onCall(async (data, context) => {
-  // Implementation
-});
-```
+### 2. Express Server (`src/index.ts`)
+The HTTP server:
+- [x] Accepts video URL from request
+- [x] Processes using FFMPEG
+- [x] Returns processing results
+- [x] Handles errors appropriately
 
 ### 3. Security Rules
-Update Storage rules to allow audio file access:
-```
-match /audio/{audioId} {
-  allow read: if true;
-  allow write: if request.auth != null;
-}
-```
+Update Storage rules to allow server operations:
+- [x] Allow admin service account access
+- [x] Maintain user-level restrictions
+- [x] Secure processing endpoints
 
 ## Configuration
 
 ### Environment Variables
 Required in `.env`:
-```
-FIREBASE_STORAGE_BUCKET="your-bucket-name"
-TEMP_DIRECTORY="/tmp"
-```
+- [x] FIREBASE_STORAGE_BUCKET
+- [x] GOOGLE_APPLICATION_CREDENTIALS
+- [x] PORT
+- [x] NODE_ENV
 
 ### Firebase Config
-Update `firebase.json`:
-```json
-{
-  "functions": {
-    "source": "functions",
-    "runtime": "nodejs18"
-  }
-}
-```
+- [x] Service account setup
+- [x] Admin SDK initialization
+- [x] Storage bucket configuration
 
 ## API Usage
 
-### Function Call
+### Process Endpoint
 ```typescript
-const result = await functions.httpsCallable('extractAudio')({
-  videoUrl: 'https://storage.../video.mp4',
-  options: {
-    format: 'mp3',
-    bitrate: '192k'
-  }
-});
+// [x] Implemented
+POST /process
+{
+  videoId: string;
+  videoUrl: string;
+  userId: string;
+}
 ```
 
 ### Response Format
 ```typescript
-interface ExtractAudioResponse {
-  success: boolean;
-  audioUrl?: string;
-  error?: string;
+// [x] Implemented
+interface ProcessingResponse {
+  status: 'success' | 'error';
+  message: string;
+  data?: {
+    jobId: string;
+    videoId: string;
+    metadata: any;
+    timestamp: number;
+  };
 }
 ```
 
 ## Testing
 
 ### Unit Tests
-Create tests for:
-- FFMPEG service
-- Input validation
-- Error handling
+- [ ] FFMPEG service tests
+- [ ] Input validation tests
+- [ ] Error handling tests
 
 ### Integration Tests
-Test:
-- Full extraction flow
-- Storage operations
-- Error scenarios
+- [ ] Full processing flow
+- [ ] Storage operations
+- [ ] Error scenarios
 
 ## Deployment
 
 ### Steps
-1. Build TypeScript:
-   ```bash
-   cd functions
-   npm run build
-   ```
-
-2. Deploy function:
-   ```bash
-   firebase deploy --only functions:extractAudio
-   ```
+1. [x] Build TypeScript
+2. [x] Configure environment
+3. [ ] Deploy server
+4. [ ] Monitor performance
 
 ### Monitoring
-Monitor using Firebase Console:
-- Function execution
-- Error rates
-- Performance metrics
+Monitor using server logs:
+- [x] Processing status
+- [x] Error rates
+- [x] Performance metrics
 
 ## Error Handling
 
 ### Error Types
 ```typescript
-type FFmpegError = 
+// [x] Implemented
+type ProcessingError = 
   | 'INVALID_INPUT'
   | 'PROCESSING_FAILED'
   | 'STORAGE_ERROR'
@@ -151,32 +122,27 @@ type FFmpegError =
 ```
 
 ### Error Responses
-All errors will include:
-- Error code
-- Human-readable message
-- Timestamp
-- Request ID
+- [x] Error code
+- [x] Human-readable message
+- [x] Timestamp
+- [x] Request ID
 
 ## Performance Considerations
 
 ### Optimizations
-1. Use appropriate memory allocation
-2. Clean up temporary files
-3. Stream processing where possible
-4. Implement timeout handling
+- [x] Memory management
+- [x] Temporary file cleanup
+- [x] Request validation
+- [x] Timeout handling
 
 ### Limitations
-- Max video size: 100MB
-- Max processing time: 5 minutes
-- Supported formats: MP4, MOV
-- Output formats: MP3, M4A
+- [x] Configurable file size limits
+- [x] Processing timeouts
+- [x] Input format validation
+- [x] Output format options
 
-## Next Steps
-
-1. Create TypeScript files in `functions/src`
-2. Implement FFMPEG service
-3. Add Firebase function
-4. Write tests
-5. Deploy and test
-6. Monitor performance
-7. Iterate based on feedback 
+## Implementation Notes
+- Server successfully processes videos and generates transcripts
+- Uses FFMPEG for reliable video processing
+- Integrated with Firebase for storage and database operations
+- Ready for expansion into administrative functions 
