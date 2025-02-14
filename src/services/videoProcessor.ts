@@ -76,8 +76,7 @@ export class VideoProcessor {
       return Math.round(status.durationMillis / 1000);
     } catch (error) {
       this.logger.error('[VideoProcessor] Error getting video duration:', error);
-      // Return 0 as fallback, but log the error
-      return 0;
+      throw new VideoError('Failed to get video duration', 'video/processing-failed');
     }
   }
 
@@ -187,9 +186,13 @@ export class VideoProcessor {
       const update: Partial<VideoMetadata> = {
         status: 'ready',
         updatedAt: new Date(),
-        duration: duration > 0 ? duration : undefined,
         thumbnailUrl: thumbnailUrl || undefined
       };
+
+      // Only include duration if it's greater than 0
+      if (duration > 0) {
+        update.duration = duration;
+      }
 
       // Update video metadata
       await this.updateVideoMetadata(videoId, update);

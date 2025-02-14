@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Image, TextInput } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Image, TextInput, Platform } from 'react-native';
 import { Layout } from '../../components/shared/Layout';
 import { Video } from '../../models/Video';
 import { VideoService } from '../../features/home/services/videoService';
@@ -10,15 +10,20 @@ import { Timestamp, onSnapshot, doc } from 'firebase/firestore';
 import { EnhancedVideoPlayer } from '../../features/learning-path/components/EnhancedVideoPlayer';
 import { formatDuration } from '../../utils/formatDuration';
 import { db } from '../../config/firebase';
+import Constants from 'expo-constants';
+
+// Server URL configuration (same as ServerTestScreen)
+const isSimulator = Constants.appOwnership === 'expo' && !Constants.sessionId;
+
+const SERVER_URL = Platform.select({
+  ios: isSimulator ? 'http://localhost:3000' : 'http://192.168.1.70:3000',
+  android: isSimulator ? 'http://10.0.2.2:3000' : 'http://192.168.1.70:3000',
+  default: 'http://localhost:3000'
+});
 
 interface VideoTranscript {
   videoId: string;
   text: string;
-  segments: Array<{
-    startTime: number;
-    endTime: number;
-    text: string;
-  }>;
   createdAt: Date;
 }
 
@@ -49,6 +54,43 @@ export const VideoDetailScreen: React.FC<Props> = ({ videoId }) => {
   const [transcript, setTranscript] = useState<VideoTranscript | null>(null);
   const [transcriptLoading, setTranscriptLoading] = useState(true);
 
+  // Function to request transcript from processing server
+  const requestTranscript = async (videoUrl: string) => {
+    try {
+      console.log('Requesting transcript from processing server:', {
+        videoId,
+        videoUrl,
+        userId: user?.uid
+      });
+
+      const response = await fetch(`${SERVER_URL}/process`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Request-ID': `${Date.now()}-${videoId}`
+        },
+        body: JSON.stringify({
+          videoId,
+          videoUrl,
+          userId: user?.uid,
+          message: 'Requesting video transcript'
+        })
+      });
+
+      const data = await response.json();
+      console.log('Processing server response:', data);
+
+      if (data.status === 'error') {
+        throw new Error(data.message);
+      }
+
+      showToast('Transcript generation started', 'success');
+    } catch (error) {
+      console.error('Error requesting transcript:', error);
+      showToast('Failed to request transcript', 'error');
+    }
+  };
+
   useEffect(() => {
     loadVideo();
     loadNotes();
@@ -56,17 +98,20 @@ export const VideoDetailScreen: React.FC<Props> = ({ videoId }) => {
     // Subscribe to transcript updates
     const unsubscribe = onSnapshot(
       doc(db, 'transcripts', videoId),
-      (doc) => {
+      async (doc) => {
         setTranscriptLoading(false);
         if (doc.exists()) {
           const data = doc.data() as FirestoreTranscript;
-          // Convert Firestore Timestamp to Date
           setTranscript({
             ...data,
             createdAt: data.createdAt.toDate()
           });
         } else {
           setTranscript(null);
+          // If video is loaded and has a URL but no transcript exists, request one
+          if (video?.videoUrl) {
+            await requestTranscript(video.videoUrl);
+          }
         }
       },
       (error) => {
@@ -76,7 +121,7 @@ export const VideoDetailScreen: React.FC<Props> = ({ videoId }) => {
     );
 
     return () => unsubscribe();
-  }, [videoId]);
+  }, [videoId, video?.videoUrl]);
 
   const loadVideo = async () => {
     try {
@@ -201,7 +246,7 @@ export const VideoDetailScreen: React.FC<Props> = ({ videoId }) => {
             <Text style={styles.description}>{video.description}</Text>
           )}
 
-          {/* Transcript Section */}
+          {/* Simplified Transcript Section */}
           <View style={styles.transcriptSection}>
             <Text style={styles.sectionTitle}>Transcript</Text>
             {transcriptLoading ? (
@@ -211,14 +256,7 @@ export const VideoDetailScreen: React.FC<Props> = ({ videoId }) => {
               </View>
             ) : transcript ? (
               <View style={styles.transcriptContent}>
-                {transcript.segments.map((segment, index) => (
-                  <View key={index} style={styles.transcriptSegment}>
-                    <Text style={styles.transcriptTimestamp}>
-                      {formatDuration(segment.startTime)}
-                    </Text>
-                    <Text style={styles.transcriptText}>{segment.text}</Text>
-                  </View>
-                ))}
+                <Text style={styles.transcriptText}>{transcript.text}</Text>
               </View>
             ) : (
               <Text style={styles.noTranscriptText}>
@@ -444,48 +482,32 @@ const styles = StyleSheet.create({
   },
   transcriptSection: {
     marginTop: 24,
-    marginBottom: 16,
-  },
-  transcriptContent: {
+    padding: 16,
     backgroundColor: '#1a1a1a',
     borderRadius: 8,
-    padding: 16,
   },
-  transcriptSegment: {
-    flexDirection: 'row',
-    marginBottom: 12,
-  },
-  transcriptTimestamp: {
-    color: '#007AFF',
-    fontSize: 14,
-    fontWeight: '500',
-    marginRight: 12,
-    minWidth: 60,
+  transcriptContent: {
+    marginTop: 8,
   },
   transcriptText: {
     color: '#fff',
-    fontSize: 14,
-    flex: 1,
-    lineHeight: 20,
+    fontSize: 16,
+    lineHeight: 24,
   },
   transcriptLoading: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#1a1a1a',
-    borderRadius: 8,
-    padding: 16,
+    gap: 8,
+    marginTop: 8,
   },
   transcriptLoadingText: {
     color: '#666',
     fontSize: 14,
-    marginLeft: 12,
   },
   noTranscriptText: {
     color: '#666',
     fontSize: 14,
+    marginTop: 8,
     fontStyle: 'italic',
-    backgroundColor: '#1a1a1a',
-    borderRadius: 8,
-    padding: 16,
   },
 }); 

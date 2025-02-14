@@ -19,13 +19,20 @@ import {
   VideoUploadOptions, 
   VideoUploadResult, 
   UploadProgress,
-  VideoError 
+  VideoError,
+  ProcessingServerRequest,
+  ProcessingServerResponse
 } from '../types/video';
 import { VideoProcessor } from './videoProcessor';
+import Constants from 'expo-constants';
+import { Platform } from 'react-native';
 
 const VIDEOS_COLLECTION = 'videos';
 const MAX_VIDEO_SIZE = 100 * 1024 * 1024; // 100MB
 const ALLOWED_VIDEO_TYPES = ['video/mp4', 'video/quicktime', 'video/x-msvideo'];
+
+// Server URL configuration
+const SERVER_URL = 'http://192.168.1.70:3000';  // Simplified for local development
 
 /**
  * Service for managing video uploads and metadata
@@ -51,6 +58,87 @@ export class VideoService {
   }
 
   /**
+   * Send video to processing server
+   */
+  private async sendToProcessingServer(
+    videoId: string, 
+    videoUrl: string, 
+    userId: string
+  ): Promise<ProcessingServerResponse> {
+    try {
+      this.logger.info('[VideoService] Sending video to processing server:', {
+        videoId,
+        userId,
+        serverUrl: SERVER_URL,
+        timestamp: new Date().toISOString()
+      });
+      
+      const request: ProcessingServerRequest = {
+        videoId,
+        videoUrl,
+        userId,
+        message: `Processing video ${videoId} for user ${userId}`
+      };
+
+      this.logger.info('[VideoService] Request payload:', request);
+
+      const response = await fetch(`${SERVER_URL}/process`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Request-ID': `${Date.now()}-${videoId}`,
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify(request)
+      });
+
+      this.logger.info('[VideoService] Response status:', response.status);
+      
+      const responseText = await response.text();
+      this.logger.info('[VideoService] Raw response:', responseText);
+
+      if (!response.ok) {
+        throw new VideoError(
+          `Server responded with ${response.status}: ${responseText}`,
+          'video/processing-failed'
+        );
+      }
+
+      const result = JSON.parse(responseText) as ProcessingServerResponse;
+      
+      if (result.status === 'error') {
+        throw new VideoError(
+          result.message || 'Processing server returned error status',
+          'video/processing-failed'
+        );
+      }
+
+      this.logger.info('[VideoService] Processing server response:', result);
+      return result;
+    } catch (error) {
+      this.logger.error('[VideoService] Processing server error:', error);
+      
+      if (error instanceof VideoError) {
+        throw error;
+      }
+      
+      throw new VideoError(
+        error instanceof Error ? error.message : 'Failed to process video on server',
+        'video/processing-failed'
+      );
+    }
+  }
+
+  /**
+   * Generate a unique video ID
+   */
+  private generateVideoId(): string {
+    const timestamp = Date.now().toString(36);
+    const randomStr = Math.random().toString(36).substring(2, 15);
+    return `${timestamp}-${randomStr}`;
+  }
+
+  /**
    * Upload a video file to Firebase Storage
    */
   async uploadVideo(
@@ -58,140 +146,123 @@ export class VideoService {
     options: VideoUploadOptions
   ): Promise<VideoUploadResult> {
     try {
-      this.logger.info('[VideoService] Starting video upload process');
-      
-      // Validate user authentication
-      const user = this.auth.currentUser;
-      if (!user) {
-        const error = 'User must be authenticated to upload videos';
-        this.logger.error('[VideoService]', error);
-        throw new VideoError(error, 'auth/not-authenticated');
+      if (!this.auth.currentUser) {
+        throw new VideoError(
+          'User must be authenticated to upload videos',
+          'auth/not-authenticated'
+        );
       }
 
-      // Validate file type
-      if (!file || !ALLOWED_VIDEO_TYPES.includes(file.type)) {
-        const error = `Invalid video file type: ${file.type}. Allowed types are: ${ALLOWED_VIDEO_TYPES.join(', ')}`;
-        this.logger.error('[VideoService]', error);
-        throw new VideoError(error, 'video/invalid-type');
+      // Validate file
+      if (!ALLOWED_VIDEO_TYPES.includes(file.type)) {
+        throw new VideoError(
+          'Invalid video format. Supported formats: MP4, MOV, AVI',
+          'video/invalid-type'
+        );
       }
 
-      // Validate file size
       if (file.size > MAX_VIDEO_SIZE) {
-        const error = 'Video file too large';
-        this.logger.error('[VideoService]', error);
-        throw new VideoError(error, 'video/file-too-large');
+        throw new VideoError(
+          'Video file is too large. Maximum size: 100MB',
+          'video/file-too-large'
+        );
       }
 
-      // Create video document
-      const videoId = doc(collection(this.db, VIDEOS_COLLECTION)).id;
-      this.logger.info(`[VideoService] Created video ID: ${videoId}`);
+      const videoId = this.generateVideoId();
+      const userId = this.auth.currentUser.uid;
+      const path = `videos/${userId}/${videoId}/${file.name}`;
       
-      const metadata: VideoMetadata = {
-        id: videoId,
-        title: options.title,
-        description: options.description,
-        creatorId: user.uid,
-        status: 'uploading',
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        size: file.size,
-        mimeType: file.type,
-        duration: 0,
-        category: options.category,
-        tags: options.tags,
-        isPublic: options.isPublic ?? false,
-        language: options.language ?? 'en',
-        difficulty: options.difficulty,
-        views: 0,
-        likes: 0
-      };
+      this.logger.info('[VideoService] Starting upload:', {
+        videoId,
+        userId,
+        path,
+        fileSize: file.size,
+        fileType: file.type
+      });
 
-      // Save initial metadata
-      this.logger.info('[VideoService] Saving initial metadata');
-      await setDoc(doc(this.db, VIDEOS_COLLECTION, videoId), metadata);
-
-      // Upload to Firebase Storage
-      const storageRef = ref(this.storage, `videos/${user.uid}/${videoId}`);
+      // Create storage reference
+      const storageRef = ref(this.storage, path);
+      
+      // Start upload
       const uploadTask = uploadBytesResumable(storageRef, file);
-
+      
+      // Track upload progress
       return new Promise((resolve, reject) => {
         uploadTask.on(
           'state_changed',
-          // Progress callback
           (snapshot) => {
             const progress: UploadProgress = {
               bytesTransferred: snapshot.bytesTransferred,
               totalBytes: snapshot.totalBytes,
-              progress: (snapshot.bytesTransferred / snapshot.totalBytes) * 100,
-              status: 'uploading'
+              progress: (snapshot.bytesTransferred / snapshot.totalBytes) * 100
             };
             this.logger.info(`[VideoService] Upload progress: ${progress.progress}%`);
             options.onProgress?.(progress);
           },
-          // Error callback
           (error) => {
             this.logger.error('[VideoService] Upload error:', error);
-            // Update metadata with error status
-            updateDoc(doc(this.db, VIDEOS_COLLECTION, videoId), {
-              status: 'error',
-              updatedAt: new Date()
-            }).catch(error => this.logger.error('[VideoService] Error updating status:', error));
-            
             reject(new VideoError('Failed to upload video', 'video/upload-failed'));
           },
-          // Complete callback
           async () => {
             try {
-              this.logger.info('[VideoService] Upload completed successfully');
-              
               // Get download URL
-              const videoUrl = await getDownloadURL(uploadTask.snapshot.ref);
-              this.logger.info('[VideoService] Got download URL:', videoUrl);
+              const downloadUrl = await getDownloadURL(uploadTask.snapshot.ref);
               
-              // Update metadata with URL and processing status
-              const updatedMetadata: Partial<VideoMetadata> = {
-                videoUrl,
+              this.logger.info('[VideoService] Upload completed:', {
+                videoId,
+                downloadUrl
+              });
+
+              // Create initial metadata
+              const metadata: VideoMetadata = {
+                id: videoId,
+                title: options.title,
+                description: options.description || '',
+                creatorId: userId,
+                videoUrl: downloadUrl,
                 status: 'processing',
-                updatedAt: new Date()
+                createdAt: new Date(),
+                updatedAt: new Date(),
+                size: file.size,
+                mimeType: file.type,
+                duration: 0,
+                category: options.category,
+                tags: options.tags || [],
+                isPublic: options.isPublic || false,
+                language: options.language || 'en',
+                difficulty: options.difficulty,
+                views: 0,
+                likes: 0
               };
+
+              // Save metadata to Firestore
+              await setDoc(doc(this.db, VIDEOS_COLLECTION, videoId), metadata);
               
-              await updateDoc(doc(this.db, VIDEOS_COLLECTION, videoId), updatedMetadata);
+              // Send to processing server and wait for response
+              try {
+                const processingResponse = await this.sendToProcessingServer(videoId, downloadUrl, userId);
+                this.logger.info('[VideoService] Processing server success:', processingResponse);
+              } catch (error) {
+                this.logger.error('[VideoService] Processing server error:', error);
+                // Continue with upload success even if processing fails
+              }
               
-              // Start video processing after upload is complete
-              this.logger.info('[VideoService] Starting video processing');
-              const processingResult = await this.processor.processVideo(
-                videoId, 
-                videoUrl,
-                metadata.duration
-              );
-              this.logger.info('[VideoService] Video processing completed:', processingResult);
-              
-              // Update final metadata with processing results
-              const finalMetadata: Partial<VideoMetadata> = {
-                ...updatedMetadata,
-                status: processingResult.status,
-                thumbnailUrl: processingResult.thumbnailUrl,
-                duration: processingResult.duration,
-                updatedAt: new Date()
-              };
-              
-              await updateDoc(doc(this.db, VIDEOS_COLLECTION, videoId), finalMetadata);
-              
+              // Resolve with success
               resolve({
                 success: true,
                 videoId,
-                metadata: { ...metadata, ...finalMetadata }
+                metadata
               });
             } catch (error) {
               this.logger.error('[VideoService] Post-upload error:', error);
-              reject(new VideoError('Failed to process video', 'video/processing-failed'));
+              reject(error instanceof VideoError ? error : new VideoError('Failed to process video', 'video/processing-failed'));
             }
           }
         );
       });
     } catch (error) {
       this.logger.error('[VideoService] Video upload error:', error);
-      throw error instanceof VideoError ? error : new VideoError('Failed to upload video');
+      throw error instanceof VideoError ? error : new VideoError('Failed to upload video', 'video/upload-failed');
     }
   }
 
@@ -202,12 +273,12 @@ export class VideoService {
     try {
       const videoDoc = await getDoc(doc(this.db, VIDEOS_COLLECTION, videoId));
       if (!videoDoc.exists()) {
-        throw new VideoError('Video not found', 'video/not-found');
+        throw new VideoError('Video not found', 'video/invalid-format');
       }
       return videoDoc.data() as VideoMetadata;
     } catch (error) {
       console.error('Get video error:', error);
-      throw error instanceof VideoError ? error : new VideoError('Failed to get video');
+      throw error instanceof VideoError ? error : new VideoError('Failed to get video', 'video/invalid-format');
     }
   }
 
@@ -217,24 +288,13 @@ export class VideoService {
   async deleteVideo(videoId: string): Promise<void> {
     try {
       const video = await this.getVideo(videoId);
-      
-      // Verify ownership
-      const user = this.auth.currentUser;
-      if (!user || video.creatorId !== user.uid) {
-        throw new VideoError('Not authorized to delete this video', 'auth/not-authorized');
-      }
-
-      // Delete from Storage if URL exists
       if (video.videoUrl) {
-        const storageRef = ref(this.storage, `videos/${user.uid}/${videoId}`);
-        await deleteObject(storageRef);
+        await deleteObject(ref(this.storage, video.videoUrl));
       }
-
-      // Delete metadata
       await deleteDoc(doc(this.db, VIDEOS_COLLECTION, videoId));
     } catch (error) {
       console.error('Delete video error:', error);
-      throw error instanceof VideoError ? error : new VideoError('Failed to delete video');
+      throw error instanceof VideoError ? error : new VideoError('Failed to delete video', 'video/invalid-format');
     }
   }
 } 
