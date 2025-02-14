@@ -16,6 +16,7 @@ node_modules/
 .pnp.js
 package-lock.json
 yarn.lock
+video-processing-server/package-lock.json
 
 # Testing
 coverage/

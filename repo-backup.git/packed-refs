@@ -1,0 +1,11 @@
+# pack-refs with: peeled fully-peeled sorted 
+35803efba14b2a9c2d694f8e639c3b895c8eac5d refs/heads/clean_new
+34e9f3113134739a357d332e18608f2f927701e4 refs/heads/fix/video-duration
+16612feb118fe2cfa1793fef769164b5da925918 refs/heads/fix/video-duration-restore
+16612feb118fe2cfa1793fef769164b5da925918 refs/heads/main
+512fe09b1215ebba9cf2a905c1c31d6fd6bbac3f refs/heads/transcript
+16612feb118fe2cfa1793fef769164b5da925918 refs/remotes/origin/HEAD
+c9f830da32d8e61be43741eb818953dd54c02fa9 refs/remotes/origin/clean_new
+16612feb118fe2cfa1793fef769164b5da925918 refs/remotes/origin/main
+df3d5c1d730e33c82b5ace0f6041c7d99e1a6a6a refs/remotes/origin/transcript
+df48c7274e4d7ab4510269753a74d0a8d69e2ded refs/stash
