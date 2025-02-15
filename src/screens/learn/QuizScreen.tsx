@@ -1,13 +1,12 @@
 import React, { useState, useCallback } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, StyleSheet } from 'react-native';
+import { View, StyleSheet, Alert } from 'react-native';
+import { Layout } from '../../components/shared/Layout';
 import { useNavigation } from '../../providers/NavigationProvider';
-
-interface QuizQuestion {
-  id: string;
-  question: string;
-  options: string[];
-  correctAnswer: number;
-}
+import { QuizPlayer } from '../../features/quiz/components/QuizPlayer';
+import { useQuizAttempt } from '../../features/quiz/hooks/useQuizAttempt';
+import { QuizMilestoneService } from '../../features/learning-path/services/quizMilestoneService';
+import type { QuestionBank } from '../../features/quiz/types';
+import { useAuthContext } from '../../providers/AuthProvider';
 
 interface QuizScreenProps {
   subjectId: string;
@@ -15,119 +14,96 @@ interface QuizScreenProps {
 
 export const QuizScreen: React.FC<QuizScreenProps> = ({ subjectId }) => {
   const { navigate } = useNavigation();
-  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
-  const [selectedAnswers, setSelectedAnswers] = useState<number[]>([]);
-  const [showResults, setShowResults] = useState(false);
+  const { user } = useAuthContext();
+  const [quiz, setQuiz] = useState<QuestionBank | null>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
 
-  // Mock questions - replace with actual data from backend
-  const questions: QuizQuestion[] = [
-    {
-      id: '1',
-      question: 'What is the main purpose of React Native?',
-      options: [
-        'To build native mobile apps',
-        'To build web applications',
-        'To build desktop applications',
-        'To build server applications'
-      ],
-      correctAnswer: 0
+  const {
+    startAttempt,
+    submitAttempt,
+  } = useQuizAttempt({
+    userId: user?.uid || '',
+    quizId: quiz?.id || '',
+    onError: (error) => {
+      console.error('Quiz attempt error:', error);
+      Alert.alert('Error', 'Failed to save quiz progress');
     },
-    {
-      id: '2',
-      question: 'Which company developed React Native?',
-      options: [
-        'Google',
-        'Apple',
-        'Facebook',
-        'Microsoft'
-      ],
-      correctAnswer: 2
-    },
-  ];
+  });
 
-  const handleSelectAnswer = useCallback((answerIndex: number) => {
-    if (showResults) return;
+  const handleStartQuiz = useCallback(async () => {
+    if (!quiz) return;
 
-    setSelectedAnswers(prev => {
-      const newAnswers = [...prev];
-      newAnswers[currentQuestionIndex] = answerIndex;
-      return newAnswers;
-    });
-  }, [currentQuestionIndex, showResults]);
-
-  const handleNextQuestion = useCallback(() => {
-    if (currentQuestionIndex < questions.length - 1) {
-      setCurrentQuestionIndex(prev => prev + 1);
-    } else {
-      setShowResults(true);
+    try {
+      console.log('▶️ Starting quiz attempt');
+      await startAttempt(quiz.questions);
+      setIsPlaying(true);
+    } catch (error) {
+      console.error('Failed to start quiz:', error);
+      Alert.alert('Error', 'Failed to start quiz');
     }
-  }, [currentQuestionIndex, questions.length]);
+  }, [quiz, startAttempt]);
 
-  const calculateScore = useCallback(() => {
-    return questions.reduce((score, question, index) => {
-      return score + (selectedAnswers[index] === question.correctAnswer ? 1 : 0);
-    }, 0);
-  }, [questions, selectedAnswers]);
+  const handleQuizComplete = useCallback(async (score: number, answers: Record<string, any>) => {
+    try {
+      console.log('✅ Completing quiz attempt:', { score });
+      await submitAttempt(answers, score);
+      Alert.alert(
+        'Quiz Complete',
+        `You scored ${score.toFixed(1)}%`,
+        [
+          {
+            text: 'Close',
+            onPress: () => {
+              setIsPlaying(false);
+              navigate('learn');
+            },
+          },
+        ]
+      );
+    } catch (error) {
+      console.error('Failed to submit quiz:', error);
+      Alert.alert('Error', 'Failed to save quiz results');
+    }
+  }, [submitAttempt, navigate]);
 
-  const currentQuestion = questions[currentQuestionIndex];
-  const hasAnsweredCurrent = selectedAnswers[currentQuestionIndex] !== undefined;
+  const handleQuizExit = useCallback(() => {
+    setIsPlaying(false);
+    navigate('learn');
+  }, [navigate]);
 
-  if (showResults) {
-    const score = calculateScore();
-    const percentage = (score / questions.length) * 100;
+  // Load quiz data
+  React.useEffect(() => {
+    const loadQuiz = async () => {
+      try {
+        console.log('🎯 Loading quiz for subject:', subjectId);
+        const quizData = await QuizMilestoneService.getQuiz(subjectId);
+        if (!quizData) {
+          Alert.alert('Error', 'Quiz not found');
+          navigate('learn');
+          return;
+        }
+        setQuiz(quizData);
+        console.log('📚 Loaded quiz data:', quizData);
+      } catch (error) {
+        console.error('Error loading quiz:', error);
+        Alert.alert('Error', 'Failed to load quiz');
+        navigate('learn');
+      }
+    };
 
-    return (
-      <View style={styles.container}>
-        <Text style={styles.title}>Quiz Results</Text>
-        <View style={styles.resultsContainer}>
-          <Text style={styles.scoreText}>
-            Score: {score}/{questions.length} ({percentage.toFixed(1)}%)
-          </Text>
-          <TouchableOpacity
-            style={styles.button}
-            onPress={() => navigate('learn')}
-          >
-            <Text style={styles.buttonText}>Back to Learning</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-    );
-  }
+    loadQuiz();
+  }, [subjectId, navigate]);
+
+  if (!quiz || !user) return null;
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.progress}>
-        Question {currentQuestionIndex + 1} of {questions.length}
-      </Text>
-      <Text style={styles.question}>{currentQuestion.question}</Text>
-      <ScrollView style={styles.optionsContainer}>
-        {currentQuestion.options.map((option, index) => (
-          <TouchableOpacity
-            key={index}
-            style={[
-              styles.optionButton,
-              selectedAnswers[currentQuestionIndex] === index && styles.selectedOption,
-              showResults && index === currentQuestion.correctAnswer && styles.correctOption,
-              showResults && selectedAnswers[currentQuestionIndex] === index && 
-              index !== currentQuestion.correctAnswer && styles.incorrectOption,
-            ]}
-            onPress={() => handleSelectAnswer(index)}
-          >
-            <Text style={styles.optionText}>{option}</Text>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
-      {hasAnsweredCurrent && (
-        <TouchableOpacity
-          style={styles.button}
-          onPress={handleNextQuestion}
-        >
-          <Text style={styles.buttonText}>
-            {currentQuestionIndex < questions.length - 1 ? 'Next Question' : 'Show Results'}
-          </Text>
-        </TouchableOpacity>
-      )}
-    </View>
+    <Layout showBackButton children={
+      <QuizPlayer
+        questionBank={quiz}
+        onComplete={handleQuizComplete}
+        onExit={handleQuizExit}
+      />
+    } />
   );
 };
 
@@ -135,72 +111,5 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#fff',
-    padding: 16,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: '600',
-    marginBottom: 24,
-    textAlign: 'center',
-  },
-  progress: {
-    fontSize: 16,
-    color: '#666',
-    marginBottom: 16,
-  },
-  question: {
-    fontSize: 20,
-    fontWeight: '600',
-    marginBottom: 24,
-  },
-  optionsContainer: {
-    flex: 1,
-    marginBottom: 16,
-  },
-  optionButton: {
-    backgroundColor: '#f8f8f8',
-    padding: 16,
-    borderRadius: 8,
-    marginBottom: 12,
-  },
-  selectedOption: {
-    backgroundColor: '#007AFF20',
-    borderColor: '#007AFF',
-    borderWidth: 1,
-  },
-  correctOption: {
-    backgroundColor: '#34C75920',
-    borderColor: '#34C759',
-    borderWidth: 1,
-  },
-  incorrectOption: {
-    backgroundColor: '#FF3B3020',
-    borderColor: '#FF3B30',
-    borderWidth: 1,
-  },
-  optionText: {
-    fontSize: 16,
-  },
-  button: {
-    backgroundColor: '#007AFF',
-    padding: 16,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  buttonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  resultsContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 24,
-  },
-  scoreText: {
-    fontSize: 24,
-    fontWeight: '600',
-    textAlign: 'center',
   },
 }); 

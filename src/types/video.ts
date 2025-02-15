@@ -30,7 +30,7 @@ export interface VideoUploadOptions {
   isPublic?: boolean;
   language?: string;
   difficulty?: string;
-  onProgress?: (progress: UploadProgress) => void;
+  onProgress?: (progress: VideoUploadProgress) => void;
 }
 
 export interface VideoUploadResponse {

@@ -1,32 +1,50 @@
 rules_version = '2';
 
-service firebase.storage {
-  match /b/{bucket}/o {
+service cloud.firestore {
+  match /databases/{database}/documents {
     // Helper functions
     function isAuthenticated() {
       return request.auth != null;
     }
     
-    function isOwner(userId) {
+    function isUserData(userId) {
       return isAuthenticated() && request.auth.uid == userId;
     }
 
-    // Videos - users can only write to their own directory
-    match /videos/{userId}/{videoId}/{fileName} {
-      allow read: if true;
-      allow write: if isOwner(userId);
+    // Allow all operations in test environment
+    function isTestEnv() {
+      return request.resource.data.testEnv == true || resource.data.testEnv == true;
     }
 
-    // Thumbnails - allow authenticated users to write
-    match /thumbnails/{videoId}/{fileName} {
+    // Videos collection rules
+    match /videos/{videoId} {
       allow read: if true;
       allow write: if isAuthenticated();
     }
 
-    // Default deny
-    match /{allPaths=**} {
-      allow read: if true;
-      allow write: if false;
+    // Progress collection rules
+    match /progress/{progressId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    // Users collection rules
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      
+      // Allow all writes to user documents if authenticated
+      allow write: if isAuthenticated();
+
+      // Allow streak updates
+      allow update: if 
+        isTestEnv() ||
+        (isUserData(userId) && 
+         request.resource.data.diff(resource.data).affectedKeys()
+           .hasOnly(['lastWatchedDate', 'currentStreak', 'longestStreak', 'updatedAt']));
+    }
+
+    // Default allow for development
+    match /{document=**} {
+      allow read, write: if isAuthenticated();
     }
   }
 } 

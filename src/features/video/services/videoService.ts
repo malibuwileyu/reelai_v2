@@ -3,7 +3,7 @@ import { doc, setDoc, getDoc, updateDoc, deleteDoc, Firestore } from 'firebase/f
 import { Auth } from 'firebase/auth';
 import { storage, auth, db } from '../../../config/firebase';
 import { COLLECTIONS } from '../../../constants';
-import { VideoMetadata, VideoUploadOptions, VideoUploadProgress, VideoUploadResponse, VideoError } from '../../../types/video';
+import { VideoMetadata, VideoUploadOptions, VideoUploadProgress, VideoUploadResponse, VideoError, VideoErrorCode } from '../../../types/video';
 import { VideoProcessor } from '../../../services/videoProcessor';
 import { StorageService } from '../../../services/storageService';
 
@@ -27,154 +27,159 @@ export class FirebaseVideoService {
   ) {}
 
   async uploadVideo(file: File, options: VideoUploadOptions): Promise<VideoUploadResponse> {
-    // Debug logs for auth state
-    this.logger.info('[VideoService] Auth state:', {
-      currentUser: this.auth.currentUser?.uid,
-      isAuthenticated: !!this.auth.currentUser,
-      token: await this.auth.currentUser?.getIdToken()
-    });
-
-    if (!this.auth.currentUser) {
-      throw new Error('User must be authenticated to upload videos');
-    }
-
-    const videoId = generateVideoId();
-    const userId = this.auth.currentUser.uid;
-    const path = `videos/${userId}/${videoId}/${file.name}`;
-    
-    // Debug log for upload path
-    this.logger.info('[VideoService] Uploading to path:', path);
-
     try {
-      // Create initial video document with metadata
-      const metadata: VideoMetadata = {
-        ...options.metadata,
-        id: videoId,
-        creatorId: userId,
-        status: 'uploading',
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      };
+      // Force token refresh to ensure valid authentication
+      await this.auth.currentUser?.getIdToken(true);
+      
+      if (!this.auth.currentUser) {
+        throw new VideoError('User must be authenticated to upload videos', 'auth/not-authenticated');
+      }
 
-      await setDoc(doc(this.db, COLLECTIONS.VIDEOS, videoId), metadata);
+      const videoId = generateVideoId();
+      const storageRef = ref(this.storage, `videos/${this.auth.currentUser.uid}/${videoId}`);
 
-      // Upload to storage
-      const storageRef = ref(this.storage, path);
-      const uploadTask = uploadBytesResumable(storageRef, file);
+      this.logger.debug('Starting video upload:', {
+        videoId,
+        userId: this.auth.currentUser.uid,
+        path: storageRef.fullPath
+      });
+
+      const uploadTask = uploadBytesResumable(storageRef, file, {
+        contentType: file.type,
+        customMetadata: {
+          title: options.title,
+          description: options.description || '',
+          isPublic: String(options.isPublic || false),
+          category: options.category || 'uncategorized',
+          language: options.language || 'en',
+          difficulty: options.difficulty || 'beginner'
+        }
+      });
+
       this.activeUploads.set(videoId, uploadTask);
 
-      // Set up progress monitoring
-      if (options.onProgress) {
-        uploadTask.on('state_changed', 
+      return new Promise((resolve, reject) => {
+        uploadTask.on(
+          'state_changed',
           (snapshot) => {
-            const progress: VideoUploadProgress = {
-              state: snapshot.state === 'canceled' ? 'cancelled' : snapshot.state,
-              progress: (snapshot.bytesTransferred / snapshot.totalBytes) * 100,
-              bytesTransferred: snapshot.bytesTransferred,
-              totalBytes: snapshot.totalBytes
-            };
             if (options.onProgress) {
-              options.onProgress(progress);
+              options.onProgress({
+                bytesTransferred: snapshot.bytesTransferred,
+                totalBytes: snapshot.totalBytes,
+                progress: (snapshot.bytesTransferred / snapshot.totalBytes) * 100,
+                status: 'uploading'
+              });
             }
           },
           (error) => {
+            // Enhanced error logging with server response
+            this.logger.error('Upload error:', {
+              code: error.code,
+              message: error.message,
+              serverResponse: error.serverResponse,
+              name: error.name,
+              stack: error.stack
+            });
+
             if (options.onProgress) {
               options.onProgress({
-                state: 'error',
-                progress: 0,
                 bytesTransferred: 0,
                 totalBytes: 0,
-                error: error as Error
+                progress: 0,
+                status: 'error'
               });
+            }
+
+            // Create a more detailed error message including server response
+            let errorMessage = 'Failed to upload video';
+            if (error.serverResponse) {
+              try {
+                const serverError = JSON.parse(error.serverResponse);
+                errorMessage = `Upload failed: ${serverError.error?.message || error.message}`;
+              } catch {
+                errorMessage = `Upload failed: ${error.serverResponse}`;
+              }
+            }
+
+            // Map Firebase Storage error codes to our VideoError codes
+            let errorCode: VideoErrorCode = 'video/upload-failed';
+            switch (error.code) {
+              case 'storage/unauthorized':
+                errorCode = 'auth/not-authorized';
+                break;
+              case 'storage/quota-exceeded':
+              case 'storage/cannot-slice-blob':
+              case 'storage/server-file-wrong-size':
+                errorCode = 'video/file-too-large';
+                break;
+              case 'storage/invalid-format':
+                errorCode = 'video/invalid-format';
+                break;
+            }
+
+            reject(new VideoError(errorMessage, errorCode));
+          },
+          async () => {
+            try {
+              const downloadUrl = await getDownloadURL(storageRef);
+              if (options.onProgress) {
+                options.onProgress({
+                  bytesTransferred: uploadTask.snapshot.bytesTransferred,
+                  totalBytes: uploadTask.snapshot.totalBytes,
+                  progress: 100,
+                  status: 'complete'
+                });
+              }
+              resolve({
+                videoId,
+                downloadUrl
+              });
+            } catch (error) {
+              this.logger.error('Error getting download URL:', error);
+              reject(new VideoError('Failed to get download URL', 'video/upload-failed'));
             }
           }
         );
-      }
-
-      // Wait for upload to complete
-      await uploadTask;
-      const downloadUrl = await getDownloadURL(storageRef);
-
-      // Update video URL in metadata before processing
-      await updateDoc(doc(this.db, COLLECTIONS.VIDEOS, videoId), {
-        videoUrl: downloadUrl,
-        status: 'processing',
-        updatedAt: new Date()
       });
-
-      // Start processing
-      const processingResult = await this.processor.processVideo(videoId, downloadUrl, userId);
-      
-      if (processingResult.status === 'error') {
-        throw new VideoError(processingResult.error || 'Video processing failed', 'video/processing-failed');
-      }
-
-      // Update video document with processing results
-      await updateDoc(doc(this.db, COLLECTIONS.VIDEOS, videoId), {
-        status: 'ready',
-        thumbnailUrl: processingResult.thumbnailUrl,
-        duration: processingResult.duration,
-        updatedAt: new Date()
-      });
-
-      return {
-        videoId,
-        downloadUrl,
-        thumbnailUrl: processingResult.thumbnailUrl,
-        duration: processingResult.duration
-      };
     } catch (error) {
-      this.logger.error('Video upload error:', error);
-      
-      // Update video document with error status
-      await updateDoc(doc(this.db, COLLECTIONS.VIDEOS, videoId), {
-        status: 'error',
-        error: error instanceof Error ? error.message : 'Unknown error'
-      }).catch(err => this.logger.error('Failed to update error status:', err));
-
-      throw error;
-    } finally {
-      this.activeUploads.delete(videoId);
+      this.logger.error('Error during upload setup:', error);
+      throw error instanceof VideoError ? error : new VideoError('Failed to setup upload', 'video/upload-failed');
     }
   }
 
   async getUploadProgress(videoId: string): Promise<VideoUploadProgress> {
     try {
-      // Check if there's an active upload
       const uploadTask = this.activeUploads.get(videoId);
       if (uploadTask) {
         const snapshot = uploadTask.snapshot;
-        const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-        
         return {
-          state: 'running',
           bytesTransferred: snapshot.bytesTransferred,
           totalBytes: snapshot.totalBytes,
-          progress
+          progress: (snapshot.bytesTransferred / snapshot.totalBytes) * 100,
+          status: 'uploading'
         };
       }
 
-      // If no active upload, check video status in Firestore
+      // If no active upload, check Firestore for video status
       const videoDoc = await getDoc(doc(this.db, COLLECTIONS.VIDEOS, videoId));
       if (!videoDoc.exists()) {
-        throw new VideoError('Video not found', 'video/not-found');
+        throw new VideoError('Video not found', 'video/upload-failed');
       }
 
       const video = videoDoc.data();
       return {
-        state: video.status === 'ready' ? 'success' : 'error',
         bytesTransferred: 0,
         totalBytes: 0,
-        progress: video.status === 'ready' ? 100 : 0
+        progress: video.status === 'ready' ? 100 : 0,
+        status: video.status === 'ready' ? 'complete' : 'error'
       };
     } catch (error) {
       console.error('Error getting upload progress:', error);
       return {
-        state: 'error',
         bytesTransferred: 0,
         totalBytes: 0,
         progress: 0,
-        error: error as Error
+        status: 'error'
       };
     }
   }

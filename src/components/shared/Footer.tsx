@@ -30,7 +30,7 @@ export const Footer: React.FC<FooterProps> = ({ currentScreen, onNavigate }) => 
 
 const styles = StyleSheet.create({
   container: {
-    height: 50,
+    height: 40,
     backgroundColor: '#1a1a1a',
     flexDirection: 'row',
     alignItems: 'center',

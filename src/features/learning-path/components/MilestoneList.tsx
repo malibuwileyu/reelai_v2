@@ -26,37 +26,48 @@ const ContentPreview: React.FC<ContentPreviewProps> = ({
   isLocked,
   onPress,
 }: ContentPreviewProps) => {
-  const isVideo = content.type === 'video';
+  const getDuration = (duration: number) => {
+    // Convert milliseconds to minutes, rounding up
+    const minutes = Math.ceil(duration / 60000);
+    return `${minutes} min`;
+  };
+
+  const icon = content.type === 'video' ? 'videocam-outline' : 'document-text-outline';
+  const title = content.title;
 
   return (
     <TouchableOpacity
-      style={[styles.contentPreview, isLocked && styles.contentPreviewLocked]}
+      style={[styles.contentItem, isLocked && styles.contentItemLocked]}
       onPress={onPress}
       disabled={isLocked}
     >
       <View style={styles.contentIcon}>
-        <Ionicons
-          name={isVideo ? 'videocam' : 'document-text'}
-          size={24}
-          color={isLocked ? '#999' : '#333'}
+        <Ionicons 
+          name={icon} 
+          size={24} 
+          color={isLocked ? '#999999' : '#007AFF'} 
         />
       </View>
       <View style={styles.contentInfo}>
-        <Text style={[styles.contentTitle, isLocked && styles.contentTitleLocked]}>
-          {content.title}
+        <Text style={[
+          styles.contentTitle,
+          isLocked && styles.contentTitleLocked
+        ]}>
+          {title}
         </Text>
-        <Text style={styles.contentMeta}>
-          {isVideo ? `${Math.round(content.duration / 60)} min` : `${content.timeLimit || 'No'} time limit`}
-        </Text>
+        {content.type === 'video' && (
+          <View style={styles.duration}>
+            <Ionicons name="time-outline" size={16} color="#666666" />
+            <Text style={styles.durationText}>{getDuration(content.duration)}</Text>
+          </View>
+        )}
       </View>
       <View style={styles.contentStatus}>
         {isCompleted ? (
-          <Ionicons name="checkmark-circle" size={24} color="#4CAF50" />
+          <Ionicons name="checkmark-circle" size={24} color="#34C759" />
         ) : isLocked ? (
-          <Ionicons name="lock-closed" size={24} color="#999" />
-        ) : (
-          <Ionicons name="arrow-forward" size={24} color="#666" />
-        )}
+          <Ionicons name="lock-closed" size={20} color="#999999" />
+        ) : null}
       </View>
     </TouchableOpacity>
   );
@@ -76,9 +87,12 @@ export const MilestoneList: React.FC<MilestoneListProps> = ({
   };
 
   const isMilestoneLocked = (milestone: Milestone): boolean => {
+    // First milestone should never be locked
+    if (milestone.order === 1) return false;
+
     if (!milestone.unlockCriteria) return false;
     
-    const { previousMilestoneId, requiredVideos, requiredQuizzes } = milestone.unlockCriteria;
+    const { previousMilestoneId, requiredVideos = [], requiredQuizzes = [] } = milestone.unlockCriteria;
     
     // Check if previous milestone is completed if required
     if (previousMilestoneId && !completedMilestones.includes(previousMilestoneId)) {
@@ -90,10 +104,10 @@ export const MilestoneList: React.FC<MilestoneListProps> = ({
       return true;
     }
 
-    // Check if all required quizzes are passed
+    // Check if all required quizzes are passed with minimum score
     if (requiredQuizzes.some(quizId => {
       const score = quizScores[quizId] || 0;
-      return score < milestone.requiredScore;
+      return score < 70; // Default passing score if not specified
     })) {
       return true;
     }
@@ -109,67 +123,113 @@ export const MilestoneList: React.FC<MilestoneListProps> = ({
     }
   };
 
+  const isContentLocked = (content: VideoContent | QuizContent, milestone: Milestone): boolean => {
+    if (content.type === 'video') {
+      // First video in a milestone should never be locked
+      const isFirstVideo = milestone.content
+        .filter(c => c.type === 'video')
+        .findIndex(c => (c as VideoContent).videoId === content.videoId) === 0;
+      if (isFirstVideo) return false;
+
+      // Videos are locked if they have a required previous video that isn't completed
+      const prevContent = milestone.content
+        .slice(0, content.order)
+        .filter(c => c.type === 'video' && c.isRequired);
+      return prevContent.some(c => !completedVideos.includes((c as VideoContent).videoId));
+    } else if (content.type === 'quiz') {
+      // Find the quiz in the milestone's quizzes array
+      const quiz = milestone.quizzes?.find(q => q.id === content.quizId);
+      if (!quiz) return false;
+
+      // Check if all required videos for this quiz are completed
+      return quiz.requirements.requiredVideoIds.some(videoId => !completedVideos.includes(videoId));
+    }
+    return false;
+  };
+
+  const getAllContent = (milestone: Milestone): (VideoContent | QuizContent)[] => {
+    const content = [...milestone.content];
+    
+    // Convert quizzes array to QuizContent format
+    if (milestone.quizzes) {
+      milestone.quizzes.forEach((quiz, index) => {
+        content.push({
+          type: 'quiz',
+          quizId: quiz.id,
+          title: `Quiz ${index + 1}`,
+          description: `Quiz for ${milestone.title}`,
+          timeLimit: quiz.requirements.timeLimit,
+          passingScore: quiz.requirements.passingScore,
+          order: content.length + index,
+          isRequired: true
+        });
+      });
+    }
+    
+    return content.sort((a, b) => a.order - b.order);
+  };
+
   return (
     <ScrollView style={styles.container}>
       {milestones.map((milestone, index) => {
         const isCompleted = isMilestoneCompleted(milestone);
         const isLocked = isMilestoneLocked(milestone);
         const isCurrent = milestone.id === currentMilestoneId;
+        const allContent = getAllContent(milestone);
 
         return (
-          <View key={milestone.id} style={styles.milestoneContainer}>
-            {/* Timeline connector */}
-            {index > 0 && (
-              <View 
-                style={[
-                  styles.timelineConnector,
-                  isCompleted && styles.timelineConnectorCompleted
-                ]} 
-              />
-            )}
-
-            {/* Milestone header */}
+          <View 
+            key={milestone.id} 
+            style={[
+              styles.milestoneContainer,
+              isLocked && styles.milestoneLocked,
+              isCurrent && styles.milestoneCurrent
+            ]}
+          >
             <TouchableOpacity
-              style={[
-                styles.milestoneHeader,
-                isCompleted && styles.milestoneHeaderCompleted,
-                isCurrent && styles.milestoneHeaderCurrent,
-                isLocked && styles.milestoneHeaderLocked,
-              ]}
+              style={styles.milestoneHeader}
               onPress={() => onMilestonePress(milestone)}
               disabled={isLocked}
             >
-              <View style={styles.milestoneNumber}>
-                <Text style={styles.milestoneNumberText}>{index + 1}</Text>
-              </View>
               <View style={styles.milestoneInfo}>
-                <Text style={styles.milestoneTitle}>{milestone.title}</Text>
-                <Text style={styles.milestoneDescription} numberOfLines={2}>
+                <Text style={[
+                  styles.milestoneTitle,
+                  isLocked && styles.milestoneTitleLocked
+                ]}>
+                  {index + 1}. {milestone.title}
+                </Text>
+                <Text style={styles.milestoneDescription}>
                   {milestone.description}
                 </Text>
               </View>
               <View style={styles.milestoneStatus}>
                 {isCompleted ? (
-                  <Ionicons name="checkmark-circle" size={24} color="#4CAF50" />
+                  <Ionicons name="checkmark-circle" size={24} color="#34C759" />
                 ) : isLocked ? (
-                  <Ionicons name="lock-closed" size={24} color="#999" />
+                  <Ionicons name="lock-closed" size={20} color="#999999" />
                 ) : (
-                  <Ionicons name="arrow-forward" size={24} color="#666" />
+                  <Ionicons name="chevron-forward" size={20} color="#007AFF" />
                 )}
               </View>
             </TouchableOpacity>
 
-            {/* Content list */}
-            {!isLocked && (
-              <View style={styles.contentList}>
-                {milestone.content.map((content, contentIndex) => (
-                  <ContentPreview
-                    key={`${content.type}-${content.type === 'video' ? content.videoId : content.quizId}`}
-                    content={content}
-                    isCompleted={isContentCompleted(content)}
-                    isLocked={isLocked || (contentIndex > 0 && !isContentCompleted(milestone.content[contentIndex - 1]))}
-                    onPress={() => onContentPress(milestone.id, content)}
-                  />
+            {allContent.length > 0 && (
+              <View style={[
+                styles.contentList,
+                isLocked && styles.contentListLocked
+              ]}>
+                {allContent.map((content, index) => (
+                  <View key={`${milestone.id}-${content.type}-${content.type === 'video' ? content.videoId : content.quizId}`}>
+                    <ContentPreview
+                      content={content}
+                      isCompleted={isContentCompleted(content)}
+                      isLocked={isLocked || isContentLocked(content, milestone)}
+                      onPress={() => onContentPress(milestone.id, content)}
+                    />
+                    {index < allContent.length - 1 && (
+                      <View style={styles.contentDivider} />
+                    )}
+                  </View>
                 ))}
               </View>
             )}
@@ -183,99 +243,71 @@ export const MilestoneList: React.FC<MilestoneListProps> = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#FFFFFF',
   },
   milestoneContainer: {
-    marginVertical: 8,
-    marginHorizontal: 16,
-  },
-  timelineConnector: {
-    position: 'absolute',
-    left: 20,
-    top: -8,
-    width: 2,
-    height: 40,
-    backgroundColor: '#e0e0e0',
-  },
-  timelineConnectorCompleted: {
-    backgroundColor: '#4CAF50',
-  },
-  milestoneHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#fff',
+    backgroundColor: '#FFFFFF',
+    marginBottom: 16,
     borderRadius: 8,
-    padding: 16,
-    elevation: 2,
+    overflow: 'hidden',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
+    elevation: 3,
   },
-  milestoneHeaderCompleted: {
-    borderLeftWidth: 4,
-    borderLeftColor: '#4CAF50',
-  },
-  milestoneHeaderCurrent: {
-    borderLeftWidth: 4,
-    borderLeftColor: '#2196F3',
-  },
-  milestoneHeaderLocked: {
+  milestoneLocked: {
     opacity: 0.7,
   },
-  milestoneNumber: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#f0f0f0',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
+  milestoneCurrent: {
+    borderColor: '#007AFF',
+    borderWidth: 2,
   },
-  milestoneNumberText: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#666',
+  milestoneHeader: {
+    flexDirection: 'row',
+    padding: 16,
+    alignItems: 'center',
   },
   milestoneInfo: {
     flex: 1,
   },
   milestoneTitle: {
     fontSize: 18,
-    fontWeight: 'bold',
+    fontWeight: '600',
     marginBottom: 4,
+  },
+  milestoneTitleLocked: {
+    color: '#999999',
   },
   milestoneDescription: {
     fontSize: 14,
-    color: '#666',
+    color: '#666666',
   },
   milestoneStatus: {
-    marginLeft: 12,
+    marginLeft: 16,
   },
   contentList: {
-    marginTop: 8,
-    marginLeft: 44,
+    paddingHorizontal: 16,
+    paddingBottom: 16,
   },
-  contentPreview: {
+  contentListLocked: {
+    opacity: 0.7,
+  },
+  contentItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#fff',
+    backgroundColor: '#F8F8F8',
     borderRadius: 8,
     padding: 12,
-    marginVertical: 4,
-    elevation: 1,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
   },
-  contentPreviewLocked: {
+  contentItemLocked: {
     opacity: 0.7,
   },
   contentIcon: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#FFFFFF',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
@@ -286,16 +318,26 @@ const styles = StyleSheet.create({
   contentTitle: {
     fontSize: 16,
     fontWeight: '500',
-    marginBottom: 2,
   },
   contentTitleLocked: {
-    color: '#999',
+    color: '#999999',
   },
-  contentMeta: {
+  duration: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  durationText: {
     fontSize: 14,
-    color: '#666',
+    color: '#666666',
+    marginLeft: 4,
   },
   contentStatus: {
     marginLeft: 12,
+  },
+  contentDivider: {
+    height: 1,
+    backgroundColor: '#E5E5E5',
+    marginVertical: 8,
   },
 }); 

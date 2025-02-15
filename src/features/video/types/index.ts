@@ -1,4 +1,5 @@
-import { Video, VideoMetadata } from '../../../models/Video';
+import { Video } from '../../../models/Video';
+import { Timestamp } from 'firebase/firestore';
 
 export interface VideoUploadProgress {
   state: 'running' | 'paused' | 'cancelled' | 'error' | 'success';
@@ -35,4 +36,28 @@ export interface VideoService {
   deleteVideo: (videoId: string) => Promise<void>;
 }
 
-export type { Video, VideoMetadata }; 
+export interface VideoProgress {
+  videoId: string;
+  userId: string;
+  completed: boolean;
+  lastPosition: number;
+  timeWatchedMs: number;
+  lastWatchedAt: Timestamp;
+  completedAt?: Timestamp;
+}
+
+export interface VideoMetadata {
+  id: string;
+  title: string;
+  description: string;
+  duration: number;
+  url: string;
+  thumbnailUrl?: string;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+  creatorId: string;
+  transcriptId?: string;
+  processingStatus: 'pending' | 'processing' | 'completed' | 'failed';
+}
+
+export type { Video }; 

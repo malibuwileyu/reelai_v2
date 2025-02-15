@@ -18,8 +18,10 @@ export type Screen =
   | 'comments'
   | 'share'
   | 'quiz'
+  | 'milestoneQuiz'
   | 'studyNotes'
-  | 'serverTest';
+  | 'serverTest'
+  | 'videoPlayer';
 
 export type NavigationParams = {
   home: undefined;
@@ -42,8 +44,10 @@ export type NavigationParams = {
   comments: { videoId: string };
   share: { videoId: string };
   quiz: { subjectId: string };
+  milestoneQuiz: { pathId: string; milestoneId: string; quizId: string };
   studyNotes: { subjectId: string };
   serverTest: undefined;
+  videoPlayer: { videoId: string; videoUrl: string; title: string; pathId: string };
 };
 
 export type NavigationScreen = keyof NavigationParams; 

@@ -95,7 +95,10 @@ export const LearningPathOverview: React.FC<LearningPathOverviewProps> = ({
     <ScrollView style={styles.container}>
       {/* Header Section */}
       <View style={styles.header}>
-        <Text style={styles.title}>{path.title}</Text>
+        <View style={styles.headerContent}>
+          <Text style={styles.pathId}>Path ID: {pathId}</Text>
+          <Text style={styles.title}>{path.title}</Text>
+        </View>
         <DifficultyBadge difficulty={path.difficulty} />
       </View>
 
@@ -209,13 +212,20 @@ const styles = StyleSheet.create({
     borderBottomColor: '#eee',
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
+  },
+  headerContent: {
+    flex: 1,
+    marginRight: 16,
+  },
+  pathId: {
+    fontSize: 12,
+    color: '#666',
+    marginBottom: 4,
   },
   title: {
     fontSize: 24,
     fontWeight: 'bold',
-    flex: 1,
-    marginRight: 16,
   },
   badge: {
     paddingHorizontal: 12,

@@ -42,12 +42,7 @@ const samplePath = {
           order: 2,
           isRequired: true
         }
-      ],
-      requiredScore: 80,
-      unlockCriteria: {
-        requiredVideos: ["v1"],
-        requiredQuizzes: ["q1"]
-      }
+      ]
     }
   ],
   creatorId: "sample_creator",

@@ -27,7 +27,7 @@ export const LearnScreen: React.FC = () => {
           <Text style={styles.sectionTitle}>Learning Paths</Text>
           <TouchableOpacity 
             style={styles.button}
-            onPress={() => navigate('pathDetail', { pathId: 'zlFUoZZSorACx7l8mS3y' })}
+            onPress={() => navigate('pathDetail', { pathId: 'dBL25Go2QVKvAuzbi7zN' })}
           >
             <Text style={styles.buttonText}>🛣️ Introduction to React Native</Text>
           </TouchableOpacity>

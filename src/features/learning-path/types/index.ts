@@ -1,4 +1,5 @@
 import { Timestamp } from 'firebase/firestore';
+import { MilestoneQuizRequirements } from './quizMilestone';
 
 /**
  * Learning path difficulty levels
@@ -22,6 +23,8 @@ export interface LearningPath {
   isPublic: boolean;
   category: string;
   tags: string[];
+  isPublished: boolean;
+  publishedAt?: Timestamp;
 }
 
 /**
@@ -32,13 +35,30 @@ export interface Milestone {
   title: string;
   description: string;
   order: number;
-  content: (VideoContent | QuizContent)[];
-  requiredScore: number;
-  unlockCriteria: {
-    previousMilestoneId?: string;
-    requiredVideos: string[];
-    requiredQuizzes: string[];
+  content: Array<VideoContent | QuizContent>;
+  quiz?: {
+    id: string;
+    videoId: string;
+    transcript?: string;
+    requirements: MilestoneQuizRequirements;
   };
+  quizzes?: Array<{
+    id: string;
+    videoId: string;
+    transcript?: string;
+    requirements: MilestoneQuizRequirements;
+  }>;
+  unlockCriteria?: {
+    previousMilestoneId?: string;
+    requiredVideos?: string[];
+    requiredQuizzes?: string[];
+    requiredScore?: number;
+  };
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+  creatorId: string;
+  isPublished: boolean;
+  publishedAt?: Timestamp;
 }
 
 /**
@@ -52,6 +72,7 @@ export interface VideoContent {
   duration: number;
   order: number;
   isRequired: boolean;
+  videoUrl: string;
 }
 
 /**

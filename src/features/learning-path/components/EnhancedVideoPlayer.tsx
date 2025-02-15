@@ -1,5 +1,5 @@
 import React, { useRef, useCallback, useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Animated, PanResponder, Modal, ActivityIndicator, Image, StatusBar, SafeAreaView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Animated, PanResponder, Modal, ActivityIndicator, Image, StatusBar, SafeAreaView, ViewStyle } from 'react-native';
 import { Video as ExpoVideo, ResizeMode, AVPlaybackStatus } from 'expo-av';
 import { Ionicons } from '@expo/vector-icons';
 import { useProgress } from '../../../hooks/useProgress';
@@ -10,12 +10,15 @@ import { getDocs, query, where, collection, addDoc, onSnapshot, doc, deleteDoc }
 import { db } from '../../../config/firebase';
 import { Timestamp } from 'firebase/firestore';
 import { ScrollView } from 'react-native';
+import { VideoProgressService } from '../../video/services/videoProgressService';
+import { ProgressTrackingService } from '../services/progressTrackingService';
 
 interface EnhancedVideoPlayerProps {
   videoId: string;
   videoUrl: string;
+  pathId?: string;
   duration?: number;
-  style?: any;
+  style?: ViewStyle;
   shouldPlay?: boolean;
   onPlaybackStatusUpdate?: (status: AVPlaybackStatus) => void;
   onError?: (error: Error) => void;
@@ -39,6 +42,7 @@ interface ControlsState {
 export const EnhancedVideoPlayer: React.FC<EnhancedVideoPlayerProps> = ({
   videoId,
   videoUrl,
+  pathId,
   duration,
   style,
   shouldPlay = false,
@@ -174,6 +178,12 @@ export const EnhancedVideoPlayer: React.FC<EnhancedVideoPlayerProps> = ({
     loadThumbnail();
   }, [videoUrl]);
 
+  useEffect(() => {
+    if (user) {
+      VideoProgressService.initializeProgress(videoId, user.uid).catch(console.error);
+    }
+  }, [videoId, user]);
+
   // Handlers
   const handlePlay = async () => {
     try {
@@ -258,56 +268,56 @@ export const EnhancedVideoPlayer: React.FC<EnhancedVideoPlayerProps> = ({
     controlsTimeoutRef.current = setTimeout(hideControls, 3000);
   };
 
-  const handlePlaybackStatusUpdate = useCallback(
-    async (status: AVPlaybackStatus) => {
-      if (!status.isLoaded || !user) return;
+  const handlePlaybackStatusUpdate = async (status: AVPlaybackStatus) => {
+    if (!status.isLoaded) return;
 
+    // Update controls state
+    setControls(prev => ({
+      ...prev,
+      isPlaying: status.isPlaying,
+      currentTime: status.positionMillis / 1000,
+      duration: status.durationMillis ? status.durationMillis / 1000 : prev.duration,
+      isBuffering: status.isBuffering,
+    }));
+
+    // Call external handler if provided
+    onPlaybackStatusUpdate?.(status);
+
+    // Track progress
+    if (user?.uid) {
       try {
-        setControls(prev => ({
-          ...prev,
-          isBuffering: status.isBuffering,
-          currentTime: status.positionMillis / 1000,
-          duration: status.durationMillis ? status.durationMillis / 1000 : prev.duration,
-        }));
+        // Update video progress
+        await VideoProgressService.updateProgress(
+          videoId, 
+          user.uid,
+          status.positionMillis,
+          status.durationMillis || 0
+        );
 
-        const currentPosition = status.positionMillis;
-        const currentTime = Date.now();
-
-        // Update progress every 5 seconds
-        if (currentPosition % 5000 < 1000 && currentTime - lastUpdateTimeRef.current >= 5000) {
-          lastUpdateTimeRef.current = currentTime;
-          const watchedSeconds = Math.floor(currentPosition / 1000);
-
-          if (currentPosition % 5000 < 1000 && currentTime - lastUpdateTimeRef.current >= 5000) {
-            lastUpdateTimeRef.current = currentTime;
-            const watchedSeconds = Math.floor(currentPosition / 1000);
-
-            if (progressUpdateTimeoutRef.current) {
-              clearTimeout(progressUpdateTimeoutRef.current);
+        // Mark as complete if we're at the end
+        if (status.didJustFinish) {
+          // First mark the video as completed
+          await VideoProgressService.markVideoAsCompleted(videoId, user.uid);
+          console.log('Video marked as completed:', videoId);
+          
+          // Then update learning path progress if we have a pathId
+          if (pathId) {
+            console.log('Updating learning path progress for pathId:', pathId);
+            try {
+              await ProgressTrackingService.updateVideoCompletion(user.uid, pathId, videoId, true);
+              console.log('Learning path progress updated successfully');
+            } catch (error) {
+              console.error('Error updating learning path progress:', error);
+              onError?.(error as Error);
             }
-
-            progressUpdateTimeoutRef.current = setTimeout(async () => {
-              try {
-                await updateProgress(watchedSeconds, currentPosition);
-              } catch (error) {
-                console.error('Error updating progress:', error);
-              }
-            }, 1000);
           }
         }
-
-        // Mark as completed if finished
-        if (status.didJustFinish) {
-          await markAsCompleted();
-        }
-
-        onPlaybackStatusUpdate?.(status);
       } catch (error) {
-        console.error('Error handling playback status:', error);
+        console.error('Error updating video progress:', error);
+        onError?.(error as Error);
       }
-    },
-    [user, updateProgress, markAsCompleted, onPlaybackStatusUpdate]
-  );
+    }
+  };
 
   // Enhancement handlers
   const toggleBookmark = async () => {
@@ -354,16 +364,16 @@ export const EnhancedVideoPlayer: React.FC<EnhancedVideoPlayerProps> = ({
   const handleVideoLoad = (status: AVPlaybackStatus) => {
     if (!status.isLoaded) {
       setLoadError(new Error('Failed to load video'));
-      setIsLoading(true);  // Keep loading state true if load failed
+      setIsLoading(false);  // Set loading to false on error
+      if (status.error) {
+        console.error('Video failed to load:', status.error);
+      }
       return;
     }
     
-    // Only set loading to false if video is successfully loaded
-    if (status.isLoaded) {
-      setIsLoading(false);
-      setLoadError(null);
-      setShowThumbnail(false);  // Hide thumbnail once video is loaded
-    }
+    setIsLoading(false);
+    setLoadError(null);
+    setShowThumbnail(false);
   };
 
   const toggleFullscreen = async () => {

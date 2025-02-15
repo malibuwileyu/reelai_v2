@@ -1,5 +1,5 @@
 import 'dotenv/config';  // Add this at the top
-import { collection, addDoc, Timestamp } from 'firebase/firestore';
+import { collection, addDoc, Timestamp, doc, setDoc } from 'firebase/firestore';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { db, auth } from '../src/config/firebase';
 
@@ -9,7 +9,7 @@ console.log('Environment check:', {
   projectId: process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID ? '✓' : '✗'
 });
 
-const samplePath = {
+const productionPath = {
   title: "Introduction to React Native",
   description: "Learn the fundamentals of building mobile apps with React Native. This comprehensive path will take you from basics to building your first app.",
   difficulty: "beginner",
@@ -28,37 +28,80 @@ const samplePath = {
       content: [
         {
           type: "video",
-          videoId: "v1",
-          title: "Setting Up Your Environment",
-          description: "Learn how to set up React Native development environment",
-          duration: 1800, // 30 minutes
+          videoId: "react-native-intro-1",
+          title: "Introduction to React Native",
+          description: "Learn the fundamentals of React Native development",
+          duration: 300000, // 5 minutes
           order: 1,
-          isRequired: true
-        },
-        {
-          type: "quiz",
-          quizId: "q1",
-          title: "Environment Setup Quiz",
-          description: "Test your knowledge of the development environment setup",
-          timeLimit: 600, // 10 minutes
-          passingScore: 80,
-          order: 2,
-          isRequired: true
+          isRequired: true,
+          videoUrl: "https://firebasestorage.googleapis.com/v0/b/reel-ai-v2.firebasestorage.app/o/videos%2Fq2yXvO4vnycNEomVD9WFrdHy7mQ2%2F1738861043541-8D4A7213-A5F4-4742-889A-96BC285EC084.mov?alt=media&token=e6e138c2-ffbd-4dde-bf86-11aaa3a4c1fb"
         }
       ],
-      requiredScore: 80,
+      quizzes: [
+        {
+          id: "react-native-intro-1-quiz",
+          videoId: "react-native-intro-1",
+          requirements: {
+            passingScore: 70,
+            timeLimit: 600000, // 10 minutes
+            requiredVideoIds: ["react-native-intro-1"]
+          }
+        }
+      ],
+      createdAt: Timestamp.now(),
+      updatedAt: Timestamp.now(),
+      creatorId: "sample_creator",
+      isPublished: true,
+      publishedAt: Timestamp.now()
+    },
+    {
+      id: "m2",
+      title: "Components and Props",
+      description: "Master React Native components and props system",
+      order: 2,
+      content: [
+        {
+          type: "video",
+          videoId: "react-native-components-1",
+          title: "React Native Components",
+          description: "Learn about React Native core components and how to use them",
+          duration: 420000, // 7 minutes
+          order: 1,
+          isRequired: true,
+          videoUrl: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4"
+        }
+      ],
+      quizzes: [
+        {
+          id: "react-native-components-1-quiz",
+          videoId: "react-native-components-1",
+          requirements: {
+            passingScore: 80,
+            timeLimit: 900000, // 15 minutes
+            requiredVideoIds: ["react-native-components-1"]
+          }
+        }
+      ],
       unlockCriteria: {
-        requiredVideos: ["v1"],
-        requiredQuizzes: ["q1"]
-      }
+        previousMilestoneId: "m1",
+        requiredVideos: ["react-native-intro-1"],
+        requiredQuizzes: ["react-native-intro-1-quiz"]
+      },
+      createdAt: Timestamp.now(),
+      updatedAt: Timestamp.now(),
+      creatorId: "sample_creator",
+      isPublished: true,
+      publishedAt: Timestamp.now()
     }
   ],
   creatorId: "sample_creator",
   isPublic: true,
   category: "Mobile Development",
   tags: ["react-native", "mobile", "javascript", "beginner"],
+  isPublished: true,
   createdAt: Timestamp.now(),
-  updatedAt: Timestamp.now()
+  updatedAt: Timestamp.now(),
+  publishedAt: Timestamp.now()
 };
 
 async function seedSamplePath() {
@@ -68,8 +111,124 @@ async function seedSamplePath() {
     await signInWithEmailAndPassword(auth, process.env.TEST_USER_EMAIL!, process.env.TEST_USER_PASSWORD!);
     console.log('Authentication successful');
 
+    // Create quizzes first
+    console.log('Creating quizzes...');
+    const quizzes = [
+      {
+        id: 'react-native-intro-1-quiz',
+        videoId: 'react-native-intro-1',
+        questions: [
+          {
+            id: 'q1',
+            type: 'multiple_choice',
+            question: 'What is React Native?',
+            options: [
+              'A framework for building native mobile apps using React',
+              'A database management system',
+              'A web browser',
+              'A programming language'
+            ],
+            correctOptionIndex: 0,
+            explanation: 'React Native is a framework that allows you to build native mobile applications using React and JavaScript.',
+            difficulty: 'beginner',
+            tags: ['react-native', 'basics'],
+            createdAt: Timestamp.now(),
+            updatedAt: Timestamp.now(),
+            creatorId: 'system',
+            isAutogenerated: false,
+            distractorExplanations: [
+              'React Native is not a database system',
+              'React Native is not a web browser',
+              'React Native is a framework, not a programming language'
+            ]
+          },
+          {
+            id: 'q2',
+            type: 'true_false',
+            question: 'React Native apps can only be built for iOS.',
+            correctAnswer: false,
+            explanation: 'React Native supports both iOS and Android platform development.',
+            difficulty: 'beginner',
+            tags: ['react-native', 'platforms'],
+            createdAt: Timestamp.now(),
+            updatedAt: Timestamp.now(),
+            creatorId: 'system',
+            isAutogenerated: false
+          }
+        ],
+        createdAt: Timestamp.now(),
+        updatedAt: Timestamp.now(),
+        metadata: {
+          videoTitle: 'Introduction to React Native',
+          videoDuration: 300000,
+          generationMethod: 'manual',
+          topics: ['react-native', 'mobile-development', 'javascript'],
+          assessedDifficulty: 'beginner'
+        }
+      },
+      {
+        id: 'react-native-components-1-quiz',
+        videoId: 'react-native-components-1',
+        questions: [
+          {
+            id: 'q1',
+            type: 'multiple_choice',
+            question: 'Which of the following is a core React Native component?',
+            options: [
+              'View',
+              'Div',
+              'Container',
+              'Section'
+            ],
+            correctOptionIndex: 0,
+            explanation: 'View is one of the fundamental components in React Native, equivalent to a div in web development.',
+            difficulty: 'beginner',
+            tags: ['react-native', 'components'],
+            createdAt: Timestamp.now(),
+            updatedAt: Timestamp.now(),
+            creatorId: 'system',
+            isAutogenerated: false,
+            distractorExplanations: [
+              'Div is a web element, not a React Native component',
+              'Container is not a core React Native component',
+              'Section is a web element, not a React Native component'
+            ]
+          },
+          {
+            id: 'q2',
+            type: 'true_false',
+            question: 'Props in React Native components are mutable.',
+            correctAnswer: false,
+            explanation: 'Props in React Native (and React) are read-only and cannot be modified by a component.',
+            difficulty: 'beginner',
+            tags: ['react-native', 'props'],
+            createdAt: Timestamp.now(),
+            updatedAt: Timestamp.now(),
+            creatorId: 'system',
+            isAutogenerated: false
+          }
+        ],
+        createdAt: Timestamp.now(),
+        updatedAt: Timestamp.now(),
+        metadata: {
+          videoTitle: 'React Native Components',
+          videoDuration: 420000,
+          generationMethod: 'manual',
+          topics: ['react-native', 'components', 'props'],
+          assessedDifficulty: 'beginner'
+        }
+      }
+    ];
+
+    // Create each quiz
+    for (const quiz of quizzes) {
+      const quizRef = doc(db, 'quizzes', quiz.id);
+      await setDoc(quizRef, quiz);
+      console.log('✅ Quiz created:', quiz.id);
+    }
+
     console.log('Creating sample learning path...');
-    const docRef = await addDoc(collection(db, 'learningPaths'), samplePath);
+    const docRef = await addDoc(collection(db, 'learningPaths'), productionPath);
     console.log('Sample learning path created with ID:', docRef.id);
     return docRef.id;
   } catch (error) {
